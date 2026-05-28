@@ -1,0 +1,91 @@
+{
+    "nodes": [
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "kitchen"
+            },
+            "id": "1",
+            "type": "n8n-nodes-base.webhook",
+            "name": "Receive Order from Backend",
+            "typeVersion": 1,
+            "position": [
+                200,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "functionCode": "const order = $json[\"order\"];\nreturn [{ json: { \"kitchen_message\": `Yeni sipariş: ${JSON.stringify(order)}` } }];"
+            },
+            "id": "2",
+            "type": "n8n-nodes-base.function",
+            "name": "Format Order for Kitchen",
+            "typeVersion": 1,
+            "position": [
+                400,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "url": "https://api.example.com/kitchen-notify",
+                "method": "POST",
+                "options": {},
+                "bodyParametersUi": {
+                    "parameter": [
+                        {
+                            "name": "message",
+                            "value": "={{$json[\"kitchen_message\"]}}"
+                        }
+                    ]
+                }
+            },
+            "id": "3",
+            "type": "n8n-nodes-base.httpRequest",
+            "name": "Notify Kitchen",
+            "typeVersion": 1,
+            "position": [
+                600,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "errorFlow": true
+            },
+            "id": "4",
+            "type": "n8n-nodes-base.errorTrigger",
+            "name": "On Error",
+            "typeVersion": 1,
+            "position": [
+                600,
+                400
+            ]
+        }
+    ],
+    "connections": {
+        "Receive Order from Backend": {
+            "main": [
+                [
+                    {
+                        "node": "Format Order for Kitchen",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Format Order for Kitchen": {
+            "main": [
+                [
+                    {
+                        "node": "Notify Kitchen",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    }
+}

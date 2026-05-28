@@ -1,0 +1,9 @@
+CREATE TABLE IF NOT EXISTS orders (
+  id SERIAL PRIMARY KEY,
+  phone VARCHAR(32) NOT NULL,
+  items JSONB NOT NULL,
+  notes TEXT,
+  status VARCHAR(16) NOT NULL DEFAULT 'pending',
+  language VARCHAR(4) NOT NULL DEFAULT 'tr',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
