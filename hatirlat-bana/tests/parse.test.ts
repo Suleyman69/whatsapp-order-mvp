@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parseReminder } from "../src/lib/parse";
 import { nextOccurrence } from "../src/lib/recurrence";
+import { mapsUrl } from "../src/lib/nav";
 
 import { fromWall } from "../src/lib/tz";
 import { describeWhen } from "../src/lib/format";
@@ -46,6 +47,9 @@ const cases: Array<[string, string, number | null, string?]> = [
 ];
 
 for (const [input, title, dueAt, repeat = "none"] of cases) {
+  test(`konum yok: ${input}`, () => {
+    assert.equal(parseReminder(input, NOW).location, null);
+  });
   test(input, () => {
     const r = parseReminder(input, NOW);
     assert.equal(r.title, title);
@@ -87,4 +91,38 @@ test("onay ekranı metni", () => {
   assert.equal(describeWhen(dt(2026, 10, 11, 9), NOW), "Yarın, 11 Ekim Pazar, 09:00");
   assert.equal(describeWhen(dt(2026, 10, 12, 14), NOW), "Öbür gün, 12 Ekim Pazartesi, 14:00");
   assert.equal(describeWhen(dt(2026, 11, 5, 9), NOW), "5 Kasım Perşembe, 09:00");
+});
+
+// Konum / navigasyon hedefi
+const placeCases: Array<[string, string, number | null, string]> = [
+  ["Yarın saat 8'de Bonn Rochusstraße 400'de olacağım.", "Bonn, Rochusstraße 400'de ol", dt(2026, 10, 11, 8), "Bonn, Rochusstraße 400"],
+  ["Bugün Erdemli'ye gideceğim.", "Erdemli'ye git", dt(2026, 10, 10, 12, 15), "Erdemli"],
+  ["Saat 17'de Köln Hbf'de olmam lazım.", "Köln Hbf'de ol", dt(2026, 10, 10, 17), "Köln Hbf"],
+  ["Yarın 10'da Dortmund Flughafen'e git.", "Dortmund Flughafen'e git", dt(2026, 10, 11, 10), "Dortmund Flughafen"],
+  ["Beni yarın sabah 7'de Essen Messe'ye gitmek için hatırlat.", "Essen Messe'ye git", dt(2026, 10, 11, 7), "Essen Messe"],
+  ["2 saat sonra Bonn Hbf'ye git", "Bonn Hbf'ye git", dt(2026, 10, 10, 14), "Bonn Hbf"],
+  ["cuma Hauptstraße 12'de olacağım", "Hauptstraße 12'de ol", dt(2026, 10, 16, 9), "Hauptstraße 12"],
+  ["yarın 15:30 erdemli'ye git", "Erdemli'ye git", dt(2026, 10, 11, 15, 30), "Erdemli"],
+  ["Annemi ziyaret etmek için Erdemli'ye gideceğim", "Annemi ziyaret etmek için Erdemli'ye git", null, "Erdemli"],
+  ["yarın saat 9'da Hauptstr. 8'de ol", "Hauptstr. 8'de ol", dt(2026, 10, 11, 9), "Hauptstr. 8"],
+];
+for (const [input, title, dueAt, location] of placeCases) {
+  test(`konum: ${input}`, () => {
+    const r = parseReminder(input, NOW);
+    assert.equal(r.location, location);
+    assert.equal(r.title, title);
+    if (dueAt !== null) assert.equal(r.dueAt, dueAt);
+  });
+}
+
+test("konum olmayan 'git/ol' cümleleri konum üretmez", () => {
+  for (const t of ["eve git", "yarın işe git", "Mehmet'i ara", "erdemliye git", "bu akşam eve giderken boya al"]) {
+    assert.equal(parseReminder(t, NOW).location, null, t);
+  }
+});
+
+test("navigasyon bağlantısı API anahtarsız Google Maps hedef bağlantısıdır", () => {
+  const url = mapsUrl("Bonn, Rochusstraße 400");
+  assert.equal(url, "https://www.google.com/maps/dir/?api=1&destination=Bonn%2C%20Rochusstra%C3%9Fe%20400");
+  assert.equal(mapsUrl("Erdemli"), "https://www.google.com/maps/dir/?api=1&destination=Erdemli");
 });

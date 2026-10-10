@@ -15,7 +15,7 @@ import {
   type PushStatus,
 } from "@/lib/push-client";
 import { REPEAT_LABELS, type Reminder } from "@/lib/types";
-import { CheckIcon, MicIcon, PencilIcon, RepeatIcon, StopIcon, TrashIcon } from "./icons";
+import { CheckIcon, MicIcon, PencilIcon, PinIcon, RepeatIcon, StopIcon, TrashIcon } from "./icons";
 import { ConfirmSheet, DetailSheet, EditSheet, TextSheet, type Draft } from "./sheets";
 import { UNSUPPORTED_MSG, useSpeech } from "./useSpeech";
 
@@ -135,7 +135,10 @@ export default function App() {
   // ---- Ses ----
   const onTranscript = useCallback((text: string) => {
     const p = parseReminder(text);
-    setSheet({ kind: "confirm", draft: { title: p.title, dueAt: p.dueAt, repeat: p.repeat, source: text } });
+    setSheet({
+      kind: "confirm",
+      draft: { title: p.title, dueAt: p.dueAt, repeat: p.repeat, location: p.location ?? undefined, source: text },
+    });
   }, []);
   const speech = useSpeech(onTranscript);
 
@@ -157,8 +160,18 @@ export default function App() {
     const t = Date.now();
     const prev = id ? reminders.find((r) => r.id === id) : undefined;
     const r: Reminder = prev
-      ? { ...prev, title: d.title, dueAt: d.dueAt, repeat: d.repeat, updatedAt: t }
-      : { id: newId(), title: d.title, dueAt: d.dueAt, repeat: d.repeat, done: false, createdAt: t, updatedAt: t, source: d.source };
+      ? { ...prev, title: d.title, dueAt: d.dueAt, repeat: d.repeat, location: d.location, updatedAt: t }
+      : {
+          id: newId(),
+          title: d.title,
+          dueAt: d.dueAt,
+          repeat: d.repeat,
+          location: d.location,
+          done: false,
+          createdAt: t,
+          updatedAt: t,
+          source: d.source,
+        };
     if (prev && prev.done && d.dueAt && d.dueAt > t) {
       r.done = false;
       r.doneAt = undefined;
@@ -372,7 +385,11 @@ export default function App() {
   );
 
   function editOf(r: Reminder) {
-    setSheet({ kind: "edit", id: r.id, draft: { title: r.title, dueAt: r.dueAt, repeat: r.repeat, source: r.source } });
+    setSheet({
+      kind: "edit",
+      id: r.id,
+      draft: { title: r.title, dueAt: r.dueAt, repeat: r.repeat, location: r.location, source: r.source },
+    });
   }
 }
 
@@ -471,6 +488,12 @@ function Section({
                 <span className={`block text-[19px] leading-snug font-medium ${r.done ? "text-zinc-400 line-through" : ""}`}>
                   {r.title}
                 </span>
+                {r.location && (
+                  <span className="mt-0.5 flex items-center gap-1.5 text-base text-zinc-500">
+                    <PinIcon className="size-4 shrink-0" />
+                    <span className="truncate">{r.location}</span>
+                  </span>
+                )}
                 {r.dueAt !== null && (
                   <span className={`mt-0.5 flex flex-wrap items-center gap-x-2 text-base ${overdue ? "text-red-600" : "text-zinc-500"}`}>
                     <span className="whitespace-nowrap">

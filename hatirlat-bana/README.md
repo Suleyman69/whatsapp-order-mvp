@@ -79,6 +79,13 @@ Tüm tarih hesapları cihazın değil **Europe/Berlin** takvimine göre yapılı
 Varsayılanlar: saat söylenmezse 09:00; sabah 09, öğlen 12, öğleden sonra 14, akşam 18, gece 22.
 “Saat 3” gibi 1–6 arası saatler öğleden sonra kabul edilir. Tarih/saat yoksa “Tarihsiz” listesine gider.
 
+## Konum ve navigasyon
+
+“Yarın saat 8'de Bonn Rochusstraße 400'de olacağım”, “Bugün Erdemli'ye gideceğim”, “Saat 17'de Köln Hbf'de olmam lazım” gibi cümlelerdeki hedef (“git / ol / var” fiiliyle birlikte yer-hal ekli öbek) otomatik ayrılır (`src/lib/location.ts`).
+Konum onay ekranında, düzenleme formunda (elle değiştirilebilir) ve bildirimden açılan detay panelinde görünür; konum varsa **Navigasyonu aç** butonu çıkar, yoksa hiç görünmez.
+Buton API anahtarı gerektirmeyen standart bir Google Maps rota bağlantısıdır (`https://www.google.com/maps/dir/?api=1&destination=…`, `src/lib/nav.ts`): Google Maps kuruluysa uygulamada, değilse tarayıcıda açılır.
+Konum alanı IndexedDB'de isteğe bağlı bir alandır; eski kayıtlar olduğu gibi çalışır.
+
 ## Dosyalar
 
 - `src/components/App.tsx` — ana ekran, listeler, mikrofon, izin akışı

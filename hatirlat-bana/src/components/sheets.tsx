@@ -3,14 +3,32 @@
 import { useState } from "react";
 import { describeWhen, formatDate, formatTime, fromInputs, toDateInput, toTimeInput } from "@/lib/format";
 import { REPEAT_LABELS, type Reminder, type Repeat } from "@/lib/types";
-import { PencilIcon } from "./icons";
+import { mapsUrl } from "@/lib/nav";
+import { NavIcon, PencilIcon } from "./icons";
 import { PrimaryButton, SecondaryButton, Sheet } from "./Sheet";
 
 export interface Draft {
   title: string;
   dueAt: number | null;
   repeat: Repeat;
+  /** Hedef konum/adres; boşsa navigasyon yok. */
+  location?: string;
   source?: string;
+}
+
+/** Google Maps'te rota hedefi olarak açar. Gerçek bir bağlantıdır: iPhone'da Google Maps kuruluysa uygulama, değilse web açılır. */
+export function NavButton({ location }: { location: string }) {
+  return (
+    <a
+      href={mapsUrl(location)}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 text-lg font-semibold text-white active:bg-emerald-700"
+    >
+      <NavIcon className="size-5" />
+      Navigasyonu aç
+    </a>
+  );
 }
 
 /** Yazılı giriş: "Pazartesi 14:30 dişçiyi ara" */
@@ -107,6 +125,7 @@ export function ConfirmSheet({
         <Row label="Görev" value={draft.title || "—"} />
         <Row label="Tarih" value={draft.dueAt ? formatDate(draft.dueAt) : "Tarihsiz"} />
         <Row label="Saat" value={draft.dueAt ? formatTime(draft.dueAt) : "—"} />
+        {draft.location && <Row label="Konum" value={draft.location} />}
         {draft.repeat !== "none" && <Row label="Tekrar" value={REPEAT_LABELS[draft.repeat]} />}
       </div>
       <PrimaryButton onClick={onSave} disabled={!draft.title}>
@@ -138,11 +157,18 @@ export function EditSheet({
   const [date, setDate] = useState(draft.dueAt ? toDateInput(draft.dueAt) : "");
   const [time, setTime] = useState(draft.dueAt ? toTimeInput(draft.dueAt) : "09:00");
   const [repeat, setRepeat] = useState<Repeat>(draft.repeat);
+  const [location, setLocation] = useState(draft.location ?? "");
 
   const save = () => {
     if (!title.trim()) return;
     const dueAt = fromInputs(date, time);
-    onSave({ title: title.trim(), dueAt, repeat: dueAt ? repeat : "none", source: draft.source });
+    onSave({
+      title: title.trim(),
+      dueAt,
+      repeat: dueAt ? repeat : "none",
+      location: location.trim() || undefined,
+      source: draft.source,
+    });
   };
 
   const field = "w-full rounded-2xl bg-zinc-100 px-4 h-14 text-lg outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-zinc-900";
@@ -203,6 +229,17 @@ export function EditSheet({
             </div>
           </fieldset>
         )}
+        <label className="block">
+          <span className="mb-1 block text-base text-zinc-500">Konum (isteğe bağlı)</span>
+          <input
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            placeholder="Bonn, Rochusstraße 400"
+            className={field}
+            enterKeyHint="done"
+          />
+        </label>
+        {location.trim() && <NavButton location={location} />}
         <PrimaryButton type="submit" disabled={!title.trim()}>
           Kaydet
         </PrimaryButton>
@@ -239,10 +276,17 @@ export function DetailSheet({
     <Sheet onClose={onClose} label="Hatırlatma">
       <p className="text-2xl font-bold leading-tight">{reminder.title}</p>
       {reminder.dueAt && (
-        <p className="mt-1 mb-5 text-lg text-zinc-500">
+        <p className="mt-1 text-lg text-zinc-500">
           {formatDate(reminder.dueAt)} · {formatTime(reminder.dueAt)}
           {reminder.repeat !== "none" && ` · ${REPEAT_LABELS[reminder.repeat]}`}
         </p>
+      )}
+      {reminder.location && <p className="mt-1 text-lg text-zinc-500">Konum: {reminder.location}</p>}
+      <div className="mb-5" />
+      {reminder.location && (
+        <div className="mb-3">
+          <NavButton location={reminder.location} />
+        </div>
       )}
       <PrimaryButton onClick={onDone}>Tamamlandı</PrimaryButton>
       <div className="mt-3 grid grid-cols-2 gap-3">

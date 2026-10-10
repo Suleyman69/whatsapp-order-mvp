@@ -10,6 +10,8 @@ export interface Reminder {
   doneAt?: number;
   createdAt: number;
   updatedAt: number;
+  /** Hedef konum/adres (navigasyon için). Eski kayıtlarda yoktur; yoksa navigasyon gösterilmez. */
+  location?: string;
   /** Kullanıcının söylediği / yazdığı ham metin. */
   source?: string;
   /** Uygulama açıkken gösterilen yedek bildirim için: en son hangi dueAt bildirildi. */
