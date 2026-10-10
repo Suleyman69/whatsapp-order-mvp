@@ -87,6 +87,14 @@ Konum onay ekranında, düzenleme formunda (elle değiştirilebilir) ve bildirim
 Buton API anahtarı gerektirmeyen standart bir Google Maps rota bağlantısıdır (`https://www.google.com/maps/dir/?api=1&destination=…`, `src/lib/nav.ts`): Google Maps kuruluysa uygulamada, değilse tarayıcıda açılır.
 Konum alanı IndexedDB'de isteğe bağlı bir alandır; eski kayıtlar olduğu gibi çalışır.
 
+## Hemen yola çık (hızlı navigasyon modu)
+
+Zaman ifadesi olmayan, konumlu ve şimdiki eylem bildiren cümleler hatırlatma onayına gitmez; doğrudan hızlı aksiyon ekranı açılır (`src/lib/intent.ts`):
+“Münsterstraße 160'a gidiyorum”, “Şimdi Bonn Rochusstraße 400'e gidiyorum”, “Erdemli'ye gidiyorum”, “Köln Hbf'ye git”, “Navigasyonu Dortmund Flughafen'e aç”, “Beni Bonn Hbf'ye götür”, “Münsterstraße 160, beni buraya götür”.
+Ekranda hedef ve üç ayrı aksiyon vardır: **Navigasyonu aç** (Google Maps), **Blitzer.de'yi aç** (iOS, Yola Çık kestirmesi) ve **Hatırlatma olarak kaydet** (normal onay ekranına geçer). iOS iki uygulamayı art arda otomatik açmaya izin vermediği için iki buton ayrıdır.
+
+Kural: tarih/saat/tekrar ifadesi varsa her zaman normal hatırlatma (“bugün saat 17'de Münsterstraße 160'a gideceğim”, “Bugün Erdemli'ye gidiyorum”, “20 dakika sonra Bonn Hbf'ye git”); “gideceğim” gibi gelecek niyet ve “…git diye hatırlat” de hatırlatmadır.
+
 ## Blitzer.de PRO
 
 Konumu olan bir hatırlatmanın detayında (bildirime dokununca açılan panel ve kayıtlı hatırlatmayı düzenleme ekranı), **iPhone/iPad'de**, Google Maps butonunun altında ayrı bir **Blitzer.de'yi aç** butonu çıkar (`src/lib/blitzer.ts`). İki buton birbirinden bağımsız iki ayrı bağlantıdır; biri diğerini tetiklemez ve zincir kurulmaz.

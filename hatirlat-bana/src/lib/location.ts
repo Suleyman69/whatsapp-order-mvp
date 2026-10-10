@@ -27,36 +27,45 @@ export function unmask(text: string): string {
   return text.replace(/[-]/g, (c) => String(c.charCodeAt(0) - MASK_BASE));
 }
 
-const VERB_RE = new RegExp(
-  "(?<![\\p{L}])(" +
-    [
-      "gideceğim",
-      "gideceğiz",
-      "gidiyorum",
-      "gitmem lazım",
-      "gitmem gerek(?:iyor)?",
-      "gitmeliyim",
-      "gitmek için",
-      "git",
-      "olacağım",
-      "olacağız",
-      "olmam lazım",
-      "olmam gerek(?:iyor)?",
-      "olmalıyım",
-      "ol",
-      "varacağım",
-      "varacağız",
-      "varmam lazım",
-      "varmalıyım",
-    ].join("|") +
-    ")(?![\\p{L}])",
-  "iu",
-);
+const BASE_VERBS = [
+  "gideceğim",
+  "gideceğiz",
+  "gidiyorum",
+  "gidiyoruz",
+  "gidelim",
+  "gitmem lazım",
+  "gitmem gerek(?:iyor)?",
+  "gitmeliyim",
+  "gitmek için",
+  "yola çıkıyorum",
+  "yola çıkıyoruz",
+  "yola çıkacağım",
+  "götürür müsün",
+  "götürebilir misin",
+  "götür",
+  "git",
+  "olacağım",
+  "olacağız",
+  "olmam lazım",
+  "olmam gerek(?:iyor)?",
+  "olmalıyım",
+  "ol",
+  "varacağım",
+  "varacağız",
+  "varmam lazım",
+  "varmalıyım",
+];
+/** "Navigasyonu Dortmund Flughafen'e aç" gibi cümleler için; "aç" tek başına çok genel olduğundan yalnızca navigasyon/rota geçince aranır. */
+const NAV_VERBS = ["açar mısın", "açabilir misin", "aç", "başlat"];
+
+const buildVerbRe = (verbs: string[]) => new RegExp(`(?<![\\p{L}])(${verbs.join("|")})(?![\\p{L}])`, "iu");
+const VERB_RE = buildVerbRe(BASE_VERBS);
+const VERB_NAV_RE = buildVerbRe([...NAV_VERBS, ...BASE_VERBS]);
 
 /** Kesme işaretsiz yazımda adresin sonundaki hal eki (git/var → yönelme, ol → bulunma). */
 const ADDRESS_SUFFIXES = { dative: ["ya", "ye", "a", "e"], locative: ["da", "de", "ta", "te"] };
 const CASE_SUFFIXES = new Set(["e", "a", "ye", "ya", "de", "da", "te", "ta", "ne", "na", "nde", "nda"]);
-const LEADING_FILLER = /^(?:(?:beni|bana|ben|lütfen|hemen|artık)\s+)+/iu;
+const LEADING_FILLER = /^(?:(?:beni|bana|ben|lütfen|hemen|artık|şimdi|şu an|şuan|haydi|navigasyonu|navigasyon|rotayı|rota)\s+)+/iu;
 const CLAUSE_BREAK = /(?:[,;]|(?<![\p{L}])(?:için|ve|ile|ben)(?![\p{L}]))\s*/giu;
 
 /** Gidilecek yer olamayacak genel sözcükler. */
@@ -128,10 +137,14 @@ export interface LocationMatch {
 /** `rest`: tarih/saat/tekrar ifadeleri çıkarılmış, büyük/küçük harfi korunmuş metin. */
 export function extractLocation(rest: string): LocationMatch | null {
   const text = unmask(rest);
-  const v = VERB_RE.exec(text);
+  const v = (/navigasyon|rota/iu.test(text) ? VERB_NAV_RE : VERB_RE).exec(text);
   if (!v) return null;
-  const before = text.slice(0, v.index);
+  let before = text.slice(0, v.index);
   const after = text.slice(v.index + v[0].length);
+  // "Dortmund Münsterstraße 160'a şimdi gidiyorum": fiilin önündeki zarf yerin ekini gizlemesin
+  before = before.replace(/\s+(?:şimdi|hemen|artık|şu an|şuan)\s*$/iu, " ");
+  // "Münsterstraße 160, beni buraya götür": "buraya" önceki cümledeki adrese işaret eder
+  if (/^götür/iu.test(v[1])) before = before.replace(/[,;]?\s*(?:beni\s+)?(?:buraya|oraya|şuraya)\s*$/iu, " ");
 
   // Son yan cümleden sonrasını al ("Annemi ziyaret etmek için Erdemli'ye" → "Erdemli'ye")
   let segStart = 0;
@@ -141,11 +154,11 @@ export function extractLocation(rest: string): LocationMatch | null {
     const city = /(?:^|\s)((?:\p{Lu}[\p{L}.-]*\s+){0,2}\p{Lu}[\p{L}.-]*),\s*$/u.exec(before.slice(0, segStart));
     if (city) segStart = city.index + city[0].length - city[0].trimStart().length;
   }
-  const seg = before.slice(segStart).trim().replace(LEADING_FILLER, "");
+  const seg = before.slice(segStart).trim().replace(/[,;]+$/u, "").trim().replace(LEADING_FILLER, "");
   if (!seg) return null;
 
   const verb = v[1].toLocaleLowerCase("tr-TR");
-  const norm: "git" | "ol" | "var" = verb.startsWith("gi") ? "git" : verb.startsWith("ol") ? "ol" : "var";
+  const norm: "git" | "ol" | "var" = verb.startsWith("ol") ? "ol" : verb.startsWith("var") ? "var" : "git";
   const kind = norm === "ol" ? "locative" : "dative";
 
   let base: string;

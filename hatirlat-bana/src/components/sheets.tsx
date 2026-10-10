@@ -67,6 +67,36 @@ export function NavButton({ location }: { location: string }) {
   );
 }
 
+/**
+ * Hızlı navigasyon modu ("Erdemli'ye gidiyorum"): tarih/saat onayı olmadan doğrudan aksiyonlar.
+ * İki uygulama ayrı butonlarla açılır; iOS art arda otomatik açmaya izin vermez.
+ */
+export function QuickNavSheet({
+  location,
+  source,
+  onSaveAsReminder,
+  onClose,
+}: {
+  location: string;
+  source?: string;
+  onSaveAsReminder: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <Sheet onClose={onClose} label="Hemen yola çık">
+      {source && <p className="mb-3 rounded-2xl bg-zinc-100 p-3 text-base italic text-zinc-600 dark:bg-zinc-900 dark:text-zinc-400">“{source}”</p>}
+      <p className="text-base text-zinc-500">Hedef</p>
+      <p className="mb-5 text-2xl font-bold leading-tight">{location}</p>
+      <div className="space-y-3">
+        <NavButton location={location} />
+        <BlitzerButton />
+        <SecondaryButton onClick={onSaveAsReminder}>Hatırlatma olarak kaydet</SecondaryButton>
+        <SecondaryButton onClick={onClose}>Kapat</SecondaryButton>
+      </div>
+    </Sheet>
+  );
+}
+
 /** Yazılı giriş: "Pazartesi 14:30 dişçiyi ara" */
 export function TextSheet({
   initial,

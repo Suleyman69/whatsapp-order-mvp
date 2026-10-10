@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { complete, remindTomorrow, rollForward, snoozeHour } from "@/lib/actions";
 import { deleteReminder, getAllReminders, newId, putReminder } from "@/lib/db";
 import { formatTime, friendlyDay, startOfNextDay } from "@/lib/format";
+import { detectNavigationIntent } from "@/lib/intent";
 import { parseReminder } from "@/lib/parse";
 import {
   currentPushStatus,
@@ -16,13 +17,14 @@ import {
 } from "@/lib/push-client";
 import { REPEAT_LABELS, type Reminder } from "@/lib/types";
 import { CheckIcon, MicIcon, PencilIcon, PinIcon, RepeatIcon, StopIcon, TrashIcon } from "./icons";
-import { ConfirmSheet, DetailSheet, EditSheet, TextSheet, type Draft } from "./sheets";
+import { ConfirmSheet, DetailSheet, EditSheet, QuickNavSheet, TextSheet, type Draft } from "./sheets";
 import { UNSUPPORTED_MSG, useSpeech } from "./useSpeech";
 
 type SheetState =
   | { kind: "none" }
   | { kind: "text"; text: string }
   | { kind: "confirm"; draft: Draft }
+  | { kind: "quick"; draft: Draft; location: string }
   | { kind: "edit"; draft: Draft; id?: string }
   | { kind: "detail"; id: string };
 
@@ -135,10 +137,10 @@ export default function App() {
   // ---- Ses ----
   const onTranscript = useCallback((text: string) => {
     const p = parseReminder(text);
-    setSheet({
-      kind: "confirm",
-      draft: { title: p.title, dueAt: p.dueAt, repeat: p.repeat, location: p.location ?? undefined, source: text },
-    });
+    const draft: Draft = { title: p.title, dueAt: p.dueAt, repeat: p.repeat, location: p.location ?? undefined, source: text };
+    // "Erdemli'ye gidiyorum": zaman ifadesi yoksa hatırlatma onayı yerine hızlı navigasyon
+    const nav = detectNavigationIntent(text);
+    setSheet(nav ? { kind: "quick", draft, location: nav.location } : { kind: "confirm", draft });
   }, []);
   const speech = useSpeech(onTranscript);
 
@@ -341,6 +343,14 @@ export default function App() {
 
       {sheet.kind === "text" && (
         <TextSheet initial={sheet.text} onSubmit={onTextSubmit} onClose={() => setSheet({ kind: "none" })} />
+      )}
+      {sheet.kind === "quick" && (
+        <QuickNavSheet
+          location={sheet.location}
+          source={sheet.draft.source}
+          onSaveAsReminder={() => setSheet({ kind: "confirm", draft: sheet.draft })}
+          onClose={() => setSheet({ kind: "none" })}
+        />
       )}
       {sheet.kind === "confirm" && (
         <ConfirmSheet
