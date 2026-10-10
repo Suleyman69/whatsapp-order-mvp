@@ -13,7 +13,6 @@ const lines = [
   `VAPID_PUBLIC_KEY=${publicKey}`,
   `VAPID_PRIVATE_KEY=${privateKey}`,
   `VAPID_SUBJECT=mailto:sen@ornek.com`,
-  `APP_TIMEZONE=Europe/Istanbul`,
   "",
 ].join("\n");
 fs.appendFileSync(file, lines);

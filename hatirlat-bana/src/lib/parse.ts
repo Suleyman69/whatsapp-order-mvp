@@ -5,6 +5,7 @@
  * Kural tabanlıdır, harici servis kullanmaz. Eşleşen her parça metinden çıkarılır,
  * kalan metin görev başlığı olur.
  */
+import { toWall, wallAddDays, wallAt, wallDay } from "./tz";
 import type { Repeat } from "./types";
 
 export interface ParseResult {
@@ -70,18 +71,6 @@ function normPeriod(p: string): Period {
   return p as Period;
 }
 
-function startOfDay(t: number) {
-  const d = new Date(t);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function addDays(d: Date, n: number) {
-  const r = new Date(d);
-  r.setDate(r.getDate() + n);
-  return r;
-}
-
 function wordNum(s: string): number {
   if (s === "bir") return 1;
   if (s === "yarım") return 0.5;
@@ -130,7 +119,7 @@ export function parseReminder(input: string, now: number = Date.now()): ParseRes
     return m;
   };
 
-  const today = startOfDay(now);
+  const today = wallDay(now); // Berlin takvim günü (duvar saati)
   let day: Date | null = null;
   let dayIsToday = false;
   let time: [number, number] | null = null;
@@ -167,11 +156,11 @@ export function parseReminder(input: string, now: number = Date.now()): ParseRes
     const unit = m[2];
     if (unit === "dakika" || unit === "dk") exactAt = now + n * 60_000;
     else if (unit === "saat") exactAt = now + n * 3_600_000;
-    else if (unit === "gün") day = addDays(today, Math.round(n));
-    else if (unit === "hafta") day = addDays(today, Math.round(n * 7));
+    else if (unit === "gün") day = wallAddDays(today, Math.round(n));
+    else if (unit === "hafta") day = wallAddDays(today, Math.round(n * 7));
     else {
       const d = new Date(today);
-      d.setMonth(d.getMonth() + Math.round(n));
+      d.setUTCMonth(d.getUTCMonth() + Math.round(n));
       day = d;
     }
   }
@@ -183,14 +172,14 @@ export function parseReminder(input: string, now: number = Date.now()): ParseRes
     period = normPeriod(m[1]);
   }
   if (!day && take(`${B0}(?:öbür gün|öbürgün|ertesi gün|yarından sonra)${B1}`)) {
-    day = addDays(today, 2);
+    day = wallAddDays(today, 2);
   }
   if (!day && take(`${B0}(?:bugün|bu gün)${WORD_SUF}${B1}`)) {
     day = today;
     dayIsToday = true;
   }
   if (!day && take(`${B0}yarın${WORD_SUF}${B1}`)) {
-    day = addDays(today, 1);
+    day = wallAddDays(today, 1);
   }
   if ((m = take(`${B0}(?:(haftaya|gelecek|önümüzdeki|bu) )?${WEEKDAY_RE}(?: gün[${L}]*)?${WORD_SUF}${B1}`))) {
     weekday = WEEKDAYS[m[2]];
@@ -200,7 +189,7 @@ export function parseReminder(input: string, now: number = Date.now()): ParseRes
     weekday = 6;
   }
   if (!day && weekday === null && take(`${B0}(?:haftaya|gelecek hafta|önümüzdeki hafta)${B1}`)) {
-    day = addDays(today, 7);
+    day = wallAddDays(today, 7);
   }
 
   // ---- Açık tarih: "15 ekim", "15 Ekim 2026'da" ----
@@ -221,8 +210,8 @@ export function parseReminder(input: string, now: number = Date.now()): ParseRes
   // "ayın 5'inde"
   if (!day && monthDay === null && (m = take(`${B0}ayın (\\d{1,2})${NUM_SUF}${B1}`))) {
     const dd = parseInt(m[1], 10);
-    let d = buildDate(dd, today.getMonth(), today.getFullYear(), today);
-    if (d && d < today) d = buildDate(dd, today.getMonth() + 1, today.getFullYear(), today);
+    let d = buildDate(dd, today.getUTCMonth(), today.getUTCFullYear(), today);
+    if (d && d < today) d = buildDate(dd, today.getUTCMonth() + 1, today.getUTCFullYear(), today);
     day = d;
   }
 
@@ -293,39 +282,33 @@ export function parseReminder(input: string, now: number = Date.now()): ParseRes
       : null;
 
   if (exactAt !== null && !day && repeat === "none") {
-    const d = new Date(exactAt);
-    d.setSeconds(0, 0);
-    return { title, dueAt: d.getTime(), repeat, timeExplicit: true };
+    return { title, dueAt: Math.floor(exactAt / 60_000) * 60_000, repeat, timeExplicit: true };
   }
   if (exactAt !== null && !hm) {
-    const d = new Date(exactAt);
-    hm = [d.getHours(), d.getMinutes()];
+    const w = toWall(exactAt);
+    hm = [w.getUTCHours(), w.getUTCMinutes()];
   }
 
-  const at = (d: Date, t: [number, number]) => {
-    const r = new Date(d);
-    r.setHours(t[0], t[1], 0, 0);
-    return r.getTime();
-  };
+  const at = (d: Date, t: [number, number]) => wallAt(d, t[0], t[1]);
 
   if (weekday !== null && !day) {
     const t = hm ?? DEFAULT_TIME;
-    let diff = (weekday - today.getDay() + 7) % 7;
+    let diff = (weekday - today.getUTCDay() + 7) % 7;
     if (nextWeek) {
       // "haftaya cuma": bu haftanın (Pazartesi başlangıçlı) cumasından bir hafta sonrası
-      const mondayOffset = (today.getDay() + 6) % 7;
+      const mondayOffset = (today.getUTCDay() + 6) % 7;
       const thisWeek = ((weekday + 6) % 7) - mondayOffset;
       diff = thisWeek + 7;
     } else if (diff === 0 && at(today, t) <= now) {
       diff = 7;
     }
-    day = addDays(today, diff);
+    day = wallAddDays(today, diff);
   }
 
   if (monthDay !== null && !day) {
     const t = hm ?? DEFAULT_TIME;
-    let d = buildDate(monthDay, today.getMonth(), today.getFullYear(), today, true);
-    if (!d || at(d, t) <= now) d = buildDate(monthDay, today.getMonth() + 1, today.getFullYear(), today, true);
+    let d = buildDate(monthDay, today.getUTCMonth(), today.getUTCFullYear(), today, true);
+    if (!d || at(d, t) <= now) d = buildDate(monthDay, today.getUTCMonth() + 1, today.getUTCFullYear(), today, true);
     day = d;
   }
 
@@ -336,7 +319,7 @@ export function parseReminder(input: string, now: number = Date.now()): ParseRes
   if (!day) {
     // Sadece saat (veya sadece tekrar) söylendi: bugün geçmediyse bugün, yoksa yarın.
     const t = hm ?? DEFAULT_TIME;
-    day = at(today, t) > now ? today : addDays(today, 1);
+    day = at(today, t) > now ? today : wallAddDays(today, 1);
   }
 
   let dueAt = at(day, hm ?? DEFAULT_TIME);
@@ -350,12 +333,12 @@ export function parseReminder(input: string, now: number = Date.now()): ParseRes
 }
 
 function buildDate(dd: number, mm: number, yyyy: number | null, today: Date, clamp = false): Date | null {
-  const year = yyyy ?? today.getFullYear();
-  const first = new Date(year, mm, 1);
-  const dim = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
+  const year = yyyy ?? today.getUTCFullYear();
+  const first = new Date(Date.UTC(year, mm, 1));
+  const dim = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0)).getUTCDate();
   if (dd < 1 || (dd > dim && !clamp)) return null;
-  first.setDate(Math.min(dd, dim));
-  if (yyyy === null && first < today) first.setFullYear(first.getFullYear() + 1);
+  first.setUTCDate(Math.min(dd, dim));
+  if (yyyy === null && first < today) first.setUTCFullYear(first.getUTCFullYear() + 1);
   return first;
 }
 

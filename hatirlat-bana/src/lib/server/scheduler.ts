@@ -23,5 +23,5 @@ export function startScheduler() {
   g.__hbScheduler = setInterval(tick, INTERVAL_MS);
   g.__hbScheduler.unref();
   void tick();
-  console.log(`[scheduler] başladı (her ${INTERVAL_MS / 1000} sn), TZ=${process.env.TZ}`);
+  console.log(`[scheduler] başladı (her ${INTERVAL_MS / 1000} sn)`);
 }

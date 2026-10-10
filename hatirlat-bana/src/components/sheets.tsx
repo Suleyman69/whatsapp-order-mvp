@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { formatDate, formatTime, fromInputs, toDateInput, toTimeInput } from "@/lib/format";
+import { describeWhen, formatDate, formatTime, fromInputs, toDateInput, toTimeInput } from "@/lib/format";
 import { REPEAT_LABELS, type Reminder, type Repeat } from "@/lib/types";
 import { PencilIcon } from "./icons";
 import { PrimaryButton, SecondaryButton, Sheet } from "./Sheet";
@@ -97,6 +97,11 @@ export function ConfirmSheet({
           <span className="flex-1 text-base italic text-zinc-600 dark:text-zinc-400">“{draft.source}”</span>
           <PencilIcon className="mt-0.5 size-5 shrink-0 text-indigo-600" />
         </button>
+      )}
+      {draft.dueAt && (
+        <p className="mb-1 text-center text-xl font-bold text-indigo-600 dark:text-indigo-400">
+          {describeWhen(draft.dueAt)}
+        </p>
       )}
       <div className="mb-5">
         <Row label="Görev" value={draft.title || "—"} />

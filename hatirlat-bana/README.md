@@ -74,6 +74,8 @@ Web Push iOS'ta **yalnızca HTTPS** ve **ana ekrana eklenmiş** uygulamada çal�
 | 20 dakika sonra fırını kapat | Fırını kapat · 20 dk sonra |
 | Her gün saat 22'de ilaç iç | İlaç iç · 22:00 · her gün |
 
+Tüm tarih hesapları cihazın değil **Europe/Berlin** takvimine göre yapılır (`src/lib/tz.ts`); “bugün / yarın / öbür gün / bu cuma / gelecek pazartesi” Berlin’deki gerçek tarihe çevrilir ve onay ekranında “Yarın, 11 Ekim Pazar, 09:00” gibi gösterilir. Saat dilimini değiştirmek için `APP_TZ` sabitini düzenle.
+
 Varsayılanlar: saat söylenmezse 09:00; sabah 09, öğlen 12, öğleden sonra 14, akşam 18, gece 22.
 “Saat 3” gibi 1–6 arası saatler öğleden sonra kabul edilir. Tarih/saat yoksa “Tarihsiz” listesine gider.
 

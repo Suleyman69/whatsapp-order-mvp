@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { complete, remindTomorrow, rollForward, snoozeHour } from "@/lib/actions";
 import { deleteReminder, getAllReminders, newId, putReminder } from "@/lib/db";
-import { formatTime, friendlyDay, startOfDay } from "@/lib/format";
+import { formatTime, friendlyDay, startOfNextDay } from "@/lib/format";
 import { parseReminder } from "@/lib/parse";
 import {
   currentPushStatus,
@@ -212,7 +212,7 @@ export default function App() {
 
   // ---- Listeler ----
   const sections = useMemo(() => {
-    const endToday = startOfDay(now) + 86_400_000;
+    const endToday = startOfNextDay(now);
     const open = reminders.filter((r) => !r.done);
     const byDue = (a: Reminder, b: Reminder) => (a.dueAt ?? 0) - (b.dueAt ?? 0);
     return {

@@ -1,24 +1,26 @@
+import { fromWall, toWall } from "./tz";
 import type { Repeat } from "./types";
 
 function daysInMonth(year: number, month: number) {
-  return new Date(year, month + 1, 0).getDate();
+  return new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
 }
 
-/** `base` tarihinden `step` adım sonraki tekrar zamanı (yerel saat diliminde). */
+/** `base` zamanından `step` adım sonraki tekrar (Berlin takvimi; saat dilimi değişse de duvar saati korunur). */
 function occurrence(base: number, repeat: Exclude<Repeat, "none">, step: number): number {
-  const d = new Date(base);
+  const w = toWall(base);
   if (repeat === "daily") {
-    d.setDate(d.getDate() + step);
-  } else if (repeat === "weekly") {
-    d.setDate(d.getDate() + step * 7);
-  } else {
-    // Ayın 31'i gibi günler kısa aylarda ayın son gününe kayar, sonraki ayda tekrar 31'e döner.
-    const day = d.getDate();
-    const target = new Date(d.getFullYear(), d.getMonth() + step, 1, d.getHours(), d.getMinutes());
-    target.setDate(Math.min(day, daysInMonth(target.getFullYear(), target.getMonth())));
-    return target.getTime();
+    w.setUTCDate(w.getUTCDate() + step);
+    return fromWall(w);
   }
-  return d.getTime();
+  if (repeat === "weekly") {
+    w.setUTCDate(w.getUTCDate() + step * 7);
+    return fromWall(w);
+  }
+  // Ayın 31'i gibi günler kısa aylarda ayın son gününe kayar, sonraki ayda tekrar 31'e döner.
+  const day = w.getUTCDate();
+  const target = new Date(Date.UTC(w.getUTCFullYear(), w.getUTCMonth() + step, 1, w.getUTCHours(), w.getUTCMinutes()));
+  target.setUTCDate(Math.min(day, daysInMonth(target.getUTCFullYear(), target.getUTCMonth())));
+  return fromWall(target);
 }
 
 /** `dueAt`'ten sonra gelen ve `after`'dan büyük olan ilk tekrar zamanı. */

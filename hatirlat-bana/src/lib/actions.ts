@@ -1,6 +1,7 @@
 /** Hatırlatma üzerindeki işlemler. public/sw.js'teki applyAction ile aynı davranır. */
 import { nextOccurrence } from "./recurrence";
 import { startOfDay } from "./format";
+import { toWall, wallAddDays, wallAt, wallDay } from "./tz";
 import type { Reminder } from "./types";
 
 /** Tamamlandı: tekrarlayan hatırlatma bir sonraki zamana geçer, diğerleri tamamlanır. */
@@ -15,11 +16,9 @@ export function snoozeHour(r: Reminder, now = Date.now()): Reminder {
 }
 
 export function remindTomorrow(r: Reminder, now = Date.now()): Reminder {
-  const base = new Date(r.dueAt ?? now);
-  const t = new Date(now);
-  t.setDate(t.getDate() + 1);
-  t.setHours(base.getHours(), base.getMinutes(), 0, 0);
-  return { ...r, dueAt: t.getTime(), done: false, updatedAt: now };
+  const base = toWall(r.dueAt ?? now);
+  const dueAt = wallAt(wallAddDays(wallDay(now), 1), base.getUTCHours(), base.getUTCMinutes());
+  return { ...r, dueAt, done: false, updatedAt: now };
 }
 
 /**

@@ -144,25 +144,46 @@ function tx(db, store, mode, fn) {
   });
 }
 
-// src/lib/recurrence.ts ile aynı mantık
+// src/lib/tz.ts + src/lib/recurrence.ts ile aynı mantık (Europe/Berlin duvar saati)
+const TZ_FMT = new Intl.DateTimeFormat("en-US", {
+  timeZone: "Europe/Berlin",
+  hourCycle: "h23",
+  year: "numeric",
+  month: "numeric",
+  day: "numeric",
+  hour: "numeric",
+  minute: "numeric",
+  second: "numeric",
+});
+
+function toWall(ts) {
+  const v = {};
+  for (const p of TZ_FMT.formatToParts(ts)) if (p.type !== "literal") v[p.type] = Number(p.value);
+  const ms = ((ts % 1000) + 1000) % 1000;
+  return new Date(Date.UTC(v.year, v.month - 1, v.day, v.hour, v.minute, v.second, ms));
+}
+
+function fromWall(wall) {
+  const guess = wall.getTime();
+  let ts = guess - (toWall(guess).getTime() - guess);
+  ts = guess - (toWall(ts).getTime() - ts);
+  return ts;
+}
+
 function nextOccurrence(dueAt, repeat, after) {
   if (repeat === "none") return null;
   for (let step = 1; step < 100000; step++) {
-    const d = new Date(dueAt);
-    let t;
-    if (repeat === "daily") {
-      d.setDate(d.getDate() + step);
-      t = d.getTime();
-    } else if (repeat === "weekly") {
-      d.setDate(d.getDate() + step * 7);
-      t = d.getTime();
-    } else {
-      const day = d.getDate();
-      const target = new Date(d.getFullYear(), d.getMonth() + step, 1, d.getHours(), d.getMinutes());
-      const dim = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
-      target.setDate(Math.min(day, dim));
-      t = target.getTime();
+    const w = toWall(dueAt);
+    if (repeat === "daily") w.setUTCDate(w.getUTCDate() + step);
+    else if (repeat === "weekly") w.setUTCDate(w.getUTCDate() + step * 7);
+    else {
+      const day = w.getUTCDate();
+      const target = new Date(Date.UTC(w.getUTCFullYear(), w.getUTCMonth() + step, 1, w.getUTCHours(), w.getUTCMinutes()));
+      const dim = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+      target.setUTCDate(Math.min(day, dim));
+      w.setTime(target.getTime());
     }
+    const t = fromWall(w);
     if (t > after) return t;
   }
   return null;
@@ -183,11 +204,9 @@ async function applyAction(id, action) {
   } else if (action === "snooze") {
     r.dueAt = Math.ceil((now + 3600000) / 60000) * 60000;
   } else if (action === "tomorrow") {
-    const base = new Date(r.dueAt || now);
-    const t = new Date(now);
-    t.setDate(t.getDate() + 1);
-    t.setHours(base.getHours(), base.getMinutes(), 0, 0);
-    r.dueAt = t.getTime();
+    const base = toWall(r.dueAt || now);
+    const day = toWall(now);
+    r.dueAt = fromWall(new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate() + 1, base.getUTCHours(), base.getUTCMinutes())));
   }
   r.updatedAt = now;
   await tx(db, "reminders", "readwrite", (s) => s.put(r));
