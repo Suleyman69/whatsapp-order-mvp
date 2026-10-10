@@ -82,6 +82,7 @@ Varsayılanlar: saat söylenmezse 09:00; sabah 09, öğlen 12, öğleden sonra 1
 ## Konum ve navigasyon
 
 “Yarın saat 8'de Bonn Rochusstraße 400'de olacağım”, “Bugün Erdemli'ye gideceğim”, “Saat 17'de Köln Hbf'de olmam lazım” gibi cümlelerdeki hedef (“git / ol / var” fiiliyle birlikte yer-hal ekli öbek) otomatik ayrılır (`src/lib/location.ts`).
+Şehir + cadde + bina numarası bir arada söylenirse konum “Şehir, Cadde No” olarak ayrılır ve görev kısa olur: “Dortmund Münsterstraße 160'a gideceğim bugün saat 17'de” → Görev **Dortmund'a git**, Konum **Dortmund, Münsterstraße 160**. “Münster Straße”, “160a / 160 a” (konuşma tanımanın kesme işaretsiz yazımı), “Münsterstraße 160 Dortmund'a” ve virgüllü yazımlar da tanınır; şehre doğru hal eki ünlü uyumuyla eklenir (Dortmund'a, Köln'e, Köln'de). Yalnızca cadde varsa görev adresi korur.
 Konum onay ekranında, düzenleme formunda (elle değiştirilebilir) ve bildirimden açılan detay panelinde görünür; konum varsa **Navigasyonu aç** butonu çıkar, yoksa hiç görünmez.
 Buton API anahtarı gerektirmeyen standart bir Google Maps rota bağlantısıdır (`https://www.google.com/maps/dir/?api=1&destination=…`, `src/lib/nav.ts`): Google Maps kuruluysa uygulamada, değilse tarayıcıda açılır.
 Konum alanı IndexedDB'de isteğe bağlı bir alandır; eski kayıtlar olduğu gibi çalışır.

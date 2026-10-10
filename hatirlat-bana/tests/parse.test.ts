@@ -4,6 +4,7 @@ import { parseReminder } from "../src/lib/parse";
 import { nextOccurrence } from "../src/lib/recurrence";
 import { mapsUrl } from "../src/lib/nav";
 import { blitzerLink } from "../src/lib/blitzer";
+import { caseSuffix } from "../src/lib/location";
 
 import { fromWall } from "../src/lib/tz";
 import { describeWhen } from "../src/lib/format";
@@ -96,7 +97,7 @@ test("onay ekranı metni", () => {
 
 // Konum / navigasyon hedefi
 const placeCases: Array<[string, string, number | null, string]> = [
-  ["Yarın saat 8'de Bonn Rochusstraße 400'de olacağım.", "Bonn, Rochusstraße 400'de ol", dt(2026, 10, 11, 8), "Bonn, Rochusstraße 400"],
+  ["Yarın saat 8'de Bonn Rochusstraße 400'de olacağım.", "Bonn'da ol", dt(2026, 10, 11, 8), "Bonn, Rochusstraße 400"],
   ["Bugün Erdemli'ye gideceğim.", "Erdemli'ye git", dt(2026, 10, 10, 12, 15), "Erdemli"],
   ["Saat 17'de Köln Hbf'de olmam lazım.", "Köln Hbf'de ol", dt(2026, 10, 10, 17), "Köln Hbf"],
   ["Yarın 10'da Dortmund Flughafen'e git.", "Dortmund Flughafen'e git", dt(2026, 10, 11, 10), "Dortmund Flughafen"],
@@ -106,6 +107,19 @@ const placeCases: Array<[string, string, number | null, string]> = [
   ["yarın 15:30 erdemli'ye git", "Erdemli'ye git", dt(2026, 10, 11, 15, 30), "Erdemli"],
   ["Annemi ziyaret etmek için Erdemli'ye gideceğim", "Annemi ziyaret etmek için Erdemli'ye git", null, "Erdemli"],
   ["yarın saat 9'da Hauptstr. 8'de ol", "Hauptstr. 8'de ol", dt(2026, 10, 11, 9), "Hauptstr. 8"],
+  // Şehir + cadde + numara → location "Şehir, Cadde No", görev kısa
+  ["Dortmund Münsterstraße 160'a gideceğim bugün saat 17'de", "Dortmund'a git", dt(2026, 10, 10, 17), "Dortmund, Münsterstraße 160"],
+  ["Bugün saat 17'de Dortmund Münsterstraße 160'a gideceğim.", "Dortmund'a git", dt(2026, 10, 10, 17), "Dortmund, Münsterstraße 160"],
+  ["dortmund münsterstraße 160'a gideceğim bugün saat 17'de", "Dortmund'a git", dt(2026, 10, 10, 17), "Dortmund, Münsterstraße 160"],
+  ["Dortmund Münsterstraße 160a gideceğim bugün saat 17'de", "Dortmund'a git", dt(2026, 10, 10, 17), "Dortmund, Münsterstraße 160"],
+  ["Dortmund Münsterstraße 160 a gideceğim bugün saat 17'de", "Dortmund'a git", dt(2026, 10, 10, 17), "Dortmund, Münsterstraße 160"],
+  ["Dortmund Münsterstraße 160 gideceğim bugün saat 17'de", "Dortmund adresine git".replace("Dortmund adresine", "Dortmund'a"), dt(2026, 10, 10, 17), "Dortmund, Münsterstraße 160"],
+  ["Dortmund Münster Straße 160'a gideceğim bugün saat 17'de", "Dortmund'a git", dt(2026, 10, 10, 17), "Dortmund, Münster Straße 160"],
+  ["Dortmund, Münsterstraße 160'a gideceğim bugün saat 17'de", "Dortmund'a git", dt(2026, 10, 10, 17), "Dortmund, Münsterstraße 160"],
+  ["Münsterstraße 160 Dortmund'a gideceğim bugün saat 17'de", "Dortmund'a git", dt(2026, 10, 10, 17), "Dortmund, Münsterstraße 160"],
+  ["yarın 9'da Köln Hohenzollernring 20'de olmam lazım", "Köln'de ol", dt(2026, 10, 11, 9), "Köln, Hohenzollernring 20"],
+  ["yarın 9'da Münsterstraße 160'a git", "Münsterstraße 160'a git", dt(2026, 10, 11, 9), "Münsterstraße 160"],
+  ["bugün saat 18'de Bad Honnef Hauptstraße 5'e git", "Bad Honnef'e git", dt(2026, 10, 10, 18), "Bad Honnef, Hauptstraße 5"],
 ];
 for (const [input, title, dueAt, location] of placeCases) {
   test(`konum: ${input}`, () => {
@@ -115,6 +129,15 @@ for (const [input, title, dueAt, location] of placeCases) {
     if (dueAt !== null) assert.equal(r.dueAt, dueAt);
   });
 }
+
+test("harmoni: şehir adına doğru hal eki", () => {
+  assert.equal(caseSuffix("Dortmund", "dative"), "a");
+  assert.equal(caseSuffix("Köln", "dative"), "e");
+  assert.equal(caseSuffix("Köln", "locative"), "de");
+  assert.equal(caseSuffix("Bonn", "locative"), "da");
+  assert.equal(caseSuffix("Frankfurt", "locative"), "ta");
+  assert.equal(caseSuffix("Roma", "dative"), "ya");
+});
 
 test("konum olmayan 'git/ol' cümleleri konum üretmez", () => {
   for (const t of ["eve git", "yarın işe git", "Mehmet'i ara", "erdemliye git", "bu akşam eve giderken boya al"]) {
