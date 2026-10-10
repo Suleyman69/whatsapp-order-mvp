@@ -106,7 +106,7 @@ const placeCases: Array<[string, string, number | null, string]> = [
   ["cuma Hauptstraße 12'de olacağım", "Hauptstraße 12'de ol", dt(2026, 10, 16, 9), "Hauptstraße 12"],
   ["yarın 15:30 erdemli'ye git", "Erdemli'ye git", dt(2026, 10, 11, 15, 30), "Erdemli"],
   ["Annemi ziyaret etmek için Erdemli'ye gideceğim", "Annemi ziyaret etmek için Erdemli'ye git", null, "Erdemli"],
-  ["yarın saat 9'da Hauptstr. 8'de ol", "Hauptstr. 8'de ol", dt(2026, 10, 11, 9), "Hauptstr. 8"],
+  ["yarın saat 9'da Hauptstr. 8'de ol", "Hauptstraße 8'de ol", dt(2026, 10, 11, 9), "Hauptstraße 8"],
   // Şehir + cadde + numara → location "Şehir, Cadde No", görev kısa
   ["Dortmund Münsterstraße 160'a gideceğim bugün saat 17'de", "Dortmund'a git", dt(2026, 10, 10, 17), "Dortmund, Münsterstraße 160"],
   ["Bugün saat 17'de Dortmund Münsterstraße 160'a gideceğim.", "Dortmund'a git", dt(2026, 10, 10, 17), "Dortmund, Münsterstraße 160"],
@@ -114,7 +114,7 @@ const placeCases: Array<[string, string, number | null, string]> = [
   ["Dortmund Münsterstraße 160a gideceğim bugün saat 17'de", "Dortmund'a git", dt(2026, 10, 10, 17), "Dortmund, Münsterstraße 160"],
   ["Dortmund Münsterstraße 160 a gideceğim bugün saat 17'de", "Dortmund'a git", dt(2026, 10, 10, 17), "Dortmund, Münsterstraße 160"],
   ["Dortmund Münsterstraße 160 gideceğim bugün saat 17'de", "Dortmund adresine git".replace("Dortmund adresine", "Dortmund'a"), dt(2026, 10, 10, 17), "Dortmund, Münsterstraße 160"],
-  ["Dortmund Münster Straße 160'a gideceğim bugün saat 17'de", "Dortmund'a git", dt(2026, 10, 10, 17), "Dortmund, Münster Straße 160"],
+  ["Dortmund Münster Straße 160'a gideceğim bugün saat 17'de", "Dortmund'a git", dt(2026, 10, 10, 17), "Dortmund, Münsterstraße 160"],
   ["Dortmund, Münsterstraße 160'a gideceğim bugün saat 17'de", "Dortmund'a git", dt(2026, 10, 10, 17), "Dortmund, Münsterstraße 160"],
   ["Münsterstraße 160 Dortmund'a gideceğim bugün saat 17'de", "Dortmund'a git", dt(2026, 10, 10, 17), "Dortmund, Münsterstraße 160"],
   ["yarın 9'da Köln Hohenzollernring 20'de olmam lazım", "Köln'de ol", dt(2026, 10, 11, 9), "Köln, Hohenzollernring 20"],

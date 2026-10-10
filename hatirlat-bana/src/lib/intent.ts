@@ -8,33 +8,41 @@
  *   zaman / tarih / tekrar ifadesi varsa  → normal hatırlatma
  *   yalnızca şimdi / gidiyorum / yola çıkıyorum / git … → hızlı navigasyon
  */
+import { tolerant } from "./location";
 import { parseReminder } from "./parse";
 
 export interface NavigationIntent {
   location: string;
 }
 
+/** Şimdiki hareket niyeti; Türkçe karakter düşmesine ("yola cikiyorum") ve konuşma dili yazımlarına ("gidiyom") toleranslı. */
 const NAV_CUE = new RegExp(
   "(?<![\\p{L}])(?:" +
     [
       "gidiyorum",
       "gidiyoruz",
+      "gidiyom",
+      "gidiyoz",
       "gidelim",
       "yola çıkıyorum",
       "yola çıkıyoruz",
+      "yola çıkıyom",
+      "yola çıkıyoz",
       "yola çık",
       "götür(?:ür müsün|ebilir misin)?",
       "navigasyon\\p{L}*",
       "rota\\p{L}*",
       "şimdi",
       "git", // "Köln Hbf'ye git." (emir)
-    ].join("|") +
+    ]
+      .map(tolerant)
+      .join("|") +
     ")(?![\\p{L}])",
   "iu",
 );
 
 /** Açıkça hatırlatma istenen cümleler hızlı moda girmez. */
-const REMINDER_CUE = /hatırlat|hatırla(?![\p{L}])|unutma/iu;
+const REMINDER_CUE = new RegExp(tolerant("hatırlat|hatırla(?![\\p{L}])|unutma"), "iu");
 
 export function detectNavigationIntent(text: string, now: number = Date.now()): NavigationIntent | null {
   const p = parseReminder(text, now);
