@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { parseReminder } from "../src/lib/parse";
 import { nextOccurrence } from "../src/lib/recurrence";
 import { mapsUrl } from "../src/lib/nav";
+import { blitzerLink } from "../src/lib/blitzer";
 
 import { fromWall } from "../src/lib/tz";
 import { describeWhen } from "../src/lib/format";
@@ -125,4 +126,19 @@ test("navigasyon bağlantısı API anahtarsız Google Maps hedef bağlantısıd�
   const url = mapsUrl("Bonn, Rochusstraße 400");
   assert.equal(url, "https://www.google.com/maps/dir/?api=1&destination=Bonn%2C%20Rochusstra%C3%9Fe%20400");
   assert.equal(mapsUrl("Erdemli"), "https://www.google.com/maps/dir/?api=1&destination=Erdemli");
+});
+
+test("Blitzer.de: varsayılan Kestirmeler 'Yola Çık' bağlantısı, Google Maps'ten ayrı", () => {
+  const b = blitzerLink(undefined, undefined);
+  assert.equal(b.kind, "shortcut");
+  assert.equal(b.href, "shortcuts://run-shortcut?name=Yola%20%C3%87%C4%B1k");
+  assert.notEqual(b.href, mapsUrl("Erdemli"));
+  assert.equal(blitzerLink(undefined, "Blitzer Başlat").href, "shortcuts://run-shortcut?name=Blitzer%20Ba%C5%9Flat");
+});
+
+test("Blitzer.de: gerçek bir uygulama bağlantısı tanımlıysa o kullanılır, tehlikeli şemalar reddedilir", () => {
+  assert.deepEqual(blitzerLink("blitzer://open", undefined), { href: "blitzer://open", kind: "deeplink" });
+  for (const bad of ["javascript://alert(1)", "data://x", "https", "  ", "not a url"]) {
+    assert.equal(blitzerLink(bad, undefined).kind, "shortcut", bad);
+  }
 });

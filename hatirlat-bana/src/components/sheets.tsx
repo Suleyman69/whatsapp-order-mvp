@@ -3,9 +3,45 @@
 import { useState } from "react";
 import { describeWhen, formatDate, formatTime, fromInputs, toDateInput, toTimeInput } from "@/lib/format";
 import { REPEAT_LABELS, type Reminder, type Repeat } from "@/lib/types";
+import { blitzerLink } from "@/lib/blitzer";
 import { mapsUrl } from "@/lib/nav";
-import { NavIcon, PencilIcon } from "./icons";
+import { isIOS } from "@/lib/push-client";
+import { AlertIcon, NavIcon, PencilIcon } from "./icons";
 import { PrimaryButton, SecondaryButton, Sheet } from "./Sheet";
+
+/**
+ * Blitzer.de PRO'yu açar (yalnızca iPhone/iPad'de, konumu olan hatırlatmalarda gösterilir).
+ * Google Maps butonundan bağımsız, ayrı bir bağlantıdır; biri diğerini tetiklemez.
+ */
+export function BlitzerButton() {
+  if (typeof navigator === "undefined" || !isIOS()) return null;
+  const link = blitzerLink();
+  return (
+    <div>
+      <a
+        href={link.href}
+        className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-amber-400 text-lg font-semibold text-zinc-900 active:bg-amber-500"
+      >
+        <AlertIcon className="size-5" />
+        Blitzer.de&apos;yi aç
+      </a>
+      <details className="mt-2 text-sm text-zinc-500">
+        <summary className="cursor-pointer">Nasıl çalışır?</summary>
+        <p className="mt-1 leading-snug">
+          {link.kind === "shortcut" ? (
+            <>
+              Kestirmeler uygulamasında <b>{link.shortcutName}</b> adlı, tek eylemi “Uygulamayı Aç → Blitzer.de PRO” olan
+              bir kestirme oluştur. Düğme onu çalıştırır.{" "}
+            </>
+          ) : (
+            <>Düğme Blitzer.de PRO’yu doğrudan açar. </>
+          )}
+          İki uygulama ayrı açılır: önce Blitzer.de’yi aç, sonra buraya dönüp Navigasyonu aç.
+        </p>
+      </details>
+    </div>
+  );
+}
 
 export interface Draft {
   title: string;
@@ -240,6 +276,7 @@ export function EditSheet({
           />
         </label>
         {location.trim() && <NavButton location={location} />}
+        {location.trim() && !isNew && <BlitzerButton />}
         <PrimaryButton type="submit" disabled={!title.trim()}>
           Kaydet
         </PrimaryButton>
@@ -284,8 +321,9 @@ export function DetailSheet({
       {reminder.location && <p className="mt-1 text-lg text-zinc-500">Konum: {reminder.location}</p>}
       <div className="mb-5" />
       {reminder.location && (
-        <div className="mb-3">
+        <div className="mb-3 space-y-3">
           <NavButton location={reminder.location} />
+          <BlitzerButton />
         </div>
       )}
       <PrimaryButton onClick={onDone}>Tamamlandı</PrimaryButton>

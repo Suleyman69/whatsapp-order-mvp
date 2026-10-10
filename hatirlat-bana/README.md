@@ -86,6 +86,21 @@ Konum onay ekranında, düzenleme formunda (elle değiştirilebilir) ve bildirim
 Buton API anahtarı gerektirmeyen standart bir Google Maps rota bağlantısıdır (`https://www.google.com/maps/dir/?api=1&destination=…`, `src/lib/nav.ts`): Google Maps kuruluysa uygulamada, değilse tarayıcıda açılır.
 Konum alanı IndexedDB'de isteğe bağlı bir alandır; eski kayıtlar olduğu gibi çalışır.
 
+## Blitzer.de PRO
+
+Konumu olan bir hatırlatmanın detayında (bildirime dokununca açılan panel ve kayıtlı hatırlatmayı düzenleme ekranı), **iPhone/iPad'de**, Google Maps butonunun altında ayrı bir **Blitzer.de'yi aç** butonu çıkar (`src/lib/blitzer.ts`). İki buton birbirinden bağımsız iki ayrı bağlantıdır; biri diğerini tetiklemez ve zincir kurulmaz.
+
+Blitzer.de PRO için belgelenmiş bir URL şeması / universal link bulunamadı (uygulama Siri Kestirmeleri ve CarPlay sunuyor). Uydurma bir `blitzer://` adresi iOS'ta hata penceresi çıkaracağı için buton Apple'ın belgelenmiş `shortcuts://run-shortcut?name=…` bağlantısıyla Kestirmeler'deki **Yola Çık** kestirmesini çalıştırır.
+
+Kurulum (bir kez, iPhone'da):
+1. **Kestirmeler** uygulaması → **+** → eylem ekle: **Uygulamayı Aç** → **Blitzer.de PRO** seç.
+2. Kestirmeyi **Yola Çık** olarak adlandır (başka ad için build sırasında `NEXT_PUBLIC_BLITZER_SHORTCUT=Ad` ver).
+3. Hatırlatma detayında **Blitzer.de'yi aç**'a dokun; iOS “Kestirmeler'de açılsın mı?” diye sorabilir.
+
+Blitzer.de ileride gerçek bir uygulama bağlantısı yayınlarsa `NEXT_PUBLIC_BLITZER_URL=blitzer://…` tanımlamak yeterlidir; tanımlıysa kestirme yerine o kullanılır (yalnızca `uygulama://` biçimli, `javascript:`/`data:` olmayan adresler kabul edilir).
+
+Önerilen sıra: önce **Blitzer.de'yi aç**, sonra Hatırlat Bana'ya dönüp **Navigasyonu aç** (Blitzer arka planda uyarılara devam eder). iOS aynı anda iki uygulamayı öne getiremez; bu yüzden ikisi tek dokunuşta zincirlenmedi. Araca binince otomatik başlatmak için Kestirmeler'de CarPlay/Bluetooth bağlanınca bu kestirmeyi çalıştıran bir **Otomasyon** kurulabilir (iPhone kilitliyken güvenilir çalışmayabilir).
+
 ## Dosyalar
 
 - `src/components/App.tsx` — ana ekran, listeler, mikrofon, izin akışı

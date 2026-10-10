@@ -55,3 +55,9 @@ export const NavIcon = (p: SVGProps<SVGSVGElement>) => (
     <path d="m3 11 18-8-8 18-2-8-8-2z" />
   </svg>
 );
+export const AlertIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base} {...p}>
+    <path d="M12 3 2 20h20L12 3z" />
+    <path d="M12 10v4M12 17.5v.01" />
+  </svg>
+);
