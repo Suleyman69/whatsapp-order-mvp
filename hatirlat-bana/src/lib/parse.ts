@@ -5,7 +5,8 @@
  * Kural tabanlıdır, harici servis kullanmaz. Eşleşen her parça metinden çıkarılır,
  * kalan metin görev başlığı olur.
  */
-import { extractLocation, maskHouseNumbers, unmask } from "./location";
+import { type AddressBook, isKnownPlace } from "./addressbook";
+import { extractLocation, type LocationKind, maskHouseNumbers, unmask } from "./location";
 import { toWall, wallAddDays, wallAt, wallDay } from "./tz";
 import type { Repeat } from "./types";
 
@@ -19,6 +20,13 @@ export interface ParseResult {
   location: string | null;
   /** Konum fiilsiz, yalnızca adres olarak söylendi ("Münsterstraße 160"). */
   locationBare: boolean;
+  /** Konumun güvenilirliği; konum yoksa null. */
+  locationKind: LocationKind | null;
+}
+
+export interface ParseOptions {
+  /** Kullanıcı tanımlı kısa adlar ("ev", "Hbf") ve bilinen yerler için adres defteri. */
+  book?: AddressBook;
 }
 
 const L = "\\p{L}";
@@ -102,7 +110,7 @@ function applyPeriod(h: number, period: Period | null): number {
   }
 }
 
-export function parseReminder(input: string, now: number = Date.now()): ParseResult {
+export function parseReminder(input: string, now: number = Date.now(), opts: ParseOptions = {}): ParseResult {
   const original = input
     .replace(/[’‘`´]/g, "'")
     .replace(/\s+/g, " ")
@@ -279,10 +287,13 @@ export function parseReminder(input: string, now: number = Date.now()): ParseRes
   }
 
   // ---- Başlık ----
-  const loc = extractLocation(orig);
+  let loc = extractLocation(orig, opts.book);
+  // Zayıf tahmin ("Sinemaya gidiyorum") bilinen bir yer değilse konum sayma
+  if (loc && loc.kind === "weak" && !isKnownPlace(loc.location, opts.book)) loc = null;
   const title = cleanTitle(loc ? loc.title : unmask(orig));
   const location = loc ? loc.location : null;
   const locationBare = !!loc?.bare;
+  const locationKind = loc ? loc.kind : null;
 
   // ---- Zamanı birleştir ----
   const timeExplicit = time !== null || exactAt !== null;
@@ -293,7 +304,7 @@ export function parseReminder(input: string, now: number = Date.now()): ParseRes
       : null;
 
   if (exactAt !== null && !day && repeat === "none") {
-    return { title, dueAt: Math.floor(exactAt / 60_000) * 60_000, repeat, timeExplicit: true, location, locationBare };
+    return { title, dueAt: Math.floor(exactAt / 60_000) * 60_000, repeat, timeExplicit: true, location, locationBare, locationKind };
   }
   if (exactAt !== null && !hm) {
     const w = toWall(exactAt);
@@ -324,7 +335,7 @@ export function parseReminder(input: string, now: number = Date.now()): ParseRes
   }
 
   if (!day && !hm && repeat === "none") {
-    return { title, dueAt: null, repeat, timeExplicit: false, location, locationBare };
+    return { title, dueAt: null, repeat, timeExplicit: false, location, locationBare, locationKind };
   }
 
   if (!day) {
@@ -340,7 +351,7 @@ export function parseReminder(input: string, now: number = Date.now()): ParseRes
     dueAt = Math.ceil((now + 15 * 60_000) / 300_000) * 300_000;
   }
 
-  return { title, dueAt, repeat, timeExplicit, location, locationBare };
+  return { title, dueAt, repeat, timeExplicit, location, locationBare, locationKind };
 }
 
 function buildDate(dd: number, mm: number, yyyy: number | null, today: Date, clamp = false): Date | null {

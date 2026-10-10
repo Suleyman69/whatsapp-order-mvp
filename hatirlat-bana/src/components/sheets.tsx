@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import type { AddressBook } from "@/lib/addressbook";
 import { describeWhen, formatDate, formatTime, fromInputs, toDateInput, toTimeInput } from "@/lib/format";
 import { REPEAT_LABELS, type Reminder, type Repeat } from "@/lib/types";
 import { blitzerLink } from "@/lib/blitzer";
@@ -55,12 +56,13 @@ export interface Draft {
 }
 
 /** Google Maps'te rota hedefi olarak açar. Gerçek bir bağlantıdır: iPhone'da Google Maps kuruluysa uygulama, değilse web açılır. */
-export function NavButton({ location }: { location: string }) {
+export function NavButton({ location, onUse }: { location: string; onUse?: () => void }) {
   return (
     <a
       href={mapsUrl(location)}
       target="_blank"
       rel="noopener noreferrer"
+      onClick={onUse}
       className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 text-lg font-semibold text-white active:bg-emerald-700"
     >
       <NavIcon className="size-5" />
@@ -75,18 +77,28 @@ export function NavButton({ location }: { location: string }) {
  */
 export function QuickNavSheet({
   location,
+  suggestion,
   source,
+  onUse,
   onSaveAsReminder,
   onClose,
 }: {
   location: string;
+  /** Orta güvenli bulanık eşleşme: "… mu demek istedin?" */
+  suggestion?: string | null;
   source?: string;
+  /** Adres kullanıldı (navigasyon / hatırlatma): sık kullanılanlara ekle, düzeltmeyi öğren */
+  onUse: (address: string) => void;
   onSaveAsReminder: (location: string) => void;
   onClose: () => void;
 }) {
   // Hedef düzenlenebilir: Türkçe tanıyıcı adı yanlış yazdıysa elle ya da Almanca dikteyle düzeltilir
   const [loc, setLoc] = useState(location);
-  const de = useGermanAddress(setLoc);
+  const [sug, setSug] = useState(suggestion ?? null);
+  const de = useGermanAddress((a) => {
+    setLoc(a);
+    setSug(null);
+  });
   const value = loc.trim();
   return (
     <Sheet onClose={onClose} label="Hemen yola çık">
@@ -104,11 +116,35 @@ export function QuickNavSheet({
         />
         <GermanMicButton de={de} />
       </div>
+      {sug && (
+        <div className="mt-2 flex items-center gap-2 rounded-2xl bg-amber-100 p-3 text-zinc-900">
+          <span className="min-w-0 flex-1 text-base leading-snug">{sug} mu demek istedin?</span>
+          <button
+            type="button"
+            className="h-10 rounded-xl bg-zinc-900 px-4 font-semibold text-white"
+            onClick={() => {
+              setLoc(sug);
+              setSug(null);
+            }}
+          >
+            Evet
+          </button>
+          <button type="button" className="h-10 rounded-xl px-3 font-medium" onClick={() => setSug(null)}>
+            Hayır
+          </button>
+        </div>
+      )}
       <GermanStatus de={de} hint="Yanlış yazıldıysa düzelt ya da DE tuşuyla adresi Almanca söyle." />
       <div className="mt-4 space-y-3">
-        {value && <NavButton location={value} />}
+        {value && <NavButton location={value} onUse={() => onUse(value)} />}
         {value && <BlitzerButton />}
-        <SecondaryButton onClick={() => onSaveAsReminder(value)} disabled={!value}>
+        <SecondaryButton
+          onClick={() => {
+            if (value) onUse(value);
+            onSaveAsReminder(value);
+          }}
+          disabled={!value}
+        >
           Hatırlatma olarak kaydet
         </SecondaryButton>
         <SecondaryButton onClick={onClose}>Kapat</SecondaryButton>
@@ -216,12 +252,17 @@ function Row({ label, value }: { label: string; value: string }) {
 /** Kaydetmeden önce özet: Görev / Tarih / Saat / Tekrar */
 export function ConfirmSheet({
   draft,
+  suggestion,
+  onAcceptSuggestion,
   onSave,
   onEdit,
   onFixText,
   onClose,
 }: {
   draft: Draft;
+  /** Orta güvenli adres önerisi: "… mu demek istedin?" */
+  suggestion?: string | null;
+  onAcceptSuggestion?: () => void;
   onSave: () => void;
   onEdit: () => void;
   onFixText: () => void;
@@ -250,6 +291,14 @@ export function ConfirmSheet({
         <Row label="Tarih" value={draft.dueAt ? formatDate(draft.dueAt) : "Tarihsiz"} />
         <Row label="Saat" value={draft.dueAt ? formatTime(draft.dueAt) : "—"} />
         {draft.location && <Row label="Konum" value={draft.location} />}
+        {draft.location && suggestion && (
+          <div className="mb-1 flex items-center gap-2 rounded-2xl bg-amber-100 p-3 text-zinc-900">
+            <span className="min-w-0 flex-1 text-base leading-snug">{suggestion} mu demek istedin?</span>
+            <button type="button" className="h-10 rounded-xl bg-zinc-900 px-4 font-semibold text-white" onClick={onAcceptSuggestion}>
+              Evet
+            </button>
+          </div>
+        )}
         {draft.repeat !== "none" && <Row label="Tekrar" value={REPEAT_LABELS[draft.repeat]} />}
       </div>
       <PrimaryButton onClick={onSave} disabled={!draft.title}>
@@ -431,6 +480,86 @@ export function DetailSheet({
         <SecondaryButton onClick={onEdit}>Düzenle</SecondaryButton>
         <SecondaryButton onClick={onClose}>Kapat</SecondaryButton>
       </div>
+    </Sheet>
+  );
+}
+
+/**
+ * Adreslerim: kısa adlar ("ev", "iş", "Hbf", "Flughafen", "Münster") tam adrese bağlanır.
+ * Sonra "Eve gidiyorum" demen yeterli; kayıtlı adresler ayrıca yanlış duyulan adreslerin düzeltilmesinde yüksek ağırlık alır.
+ */
+export function AddressBookSheet({
+  book,
+  onAdd,
+  onRemove,
+  onClose,
+}: {
+  book: AddressBook;
+  onAdd: (name: string, address: string) => void;
+  onRemove: (name: string) => void;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [address, setAddress] = useState("");
+  const de = useGermanAddress(setAddress);
+  const aliases = Object.values(book.aliases);
+  const field = "h-14 w-full rounded-2xl bg-zinc-100 px-4 text-lg outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-zinc-900";
+  return (
+    <Sheet onClose={onClose} label="Adreslerim">
+      <p className="mb-3 text-xl font-bold">Adreslerim</p>
+      {aliases.length === 0 ? (
+        <p className="mb-4 text-base text-zinc-500">
+          Kısa ad ekle: “ev” → tam adres. Sonra “Eve gidiyorum” demen yeterli.
+        </p>
+      ) : (
+        <ul className="mb-4 divide-y divide-zinc-200 dark:divide-zinc-800">
+          {aliases.map((a) => (
+            <li key={a.name} className="flex items-center gap-3 py-2">
+              <div className="min-w-0 flex-1">
+                <p className="text-lg font-semibold">{a.name}</p>
+                <p className="truncate text-base text-zinc-500">{a.address}</p>
+              </div>
+              <button type="button" className="h-10 rounded-xl px-3 text-red-600" onClick={() => onRemove(a.name)} aria-label={`${a.name} sil`}>
+                Sil
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <form
+        className="space-y-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!name.trim() || !address.trim()) return;
+          onAdd(name, address);
+          setName("");
+          setAddress("");
+        }}
+      >
+        <div className="flex flex-wrap gap-2">
+          {["ev", "iş", "Hbf", "Flughafen"].map((n) => (
+            <button key={n} type="button" onClick={() => setName(n)} className="h-9 rounded-full bg-zinc-100 px-4 text-base dark:bg-zinc-800">
+              {n}
+            </button>
+          ))}
+        </div>
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Kısa ad (ev, iş, Hbf…)" aria-label="Kısa ad" className={field} />
+        <div className="flex gap-2">
+          <input
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            placeholder="Dortmund, Münsterstraße 160"
+            aria-label="Tam adres"
+            className={`${field} min-w-0 flex-1`}
+          />
+          <GermanMicButton de={de} />
+        </div>
+        <GermanStatus de={de} />
+        <PrimaryButton type="submit" disabled={!name.trim() || !address.trim()}>
+          Ekle
+        </PrimaryButton>
+        <SecondaryButton onClick={onClose}>Kapat</SecondaryButton>
+      </form>
     </Sheet>
   );
 }

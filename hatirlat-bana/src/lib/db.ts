@@ -2,6 +2,7 @@
  * IndexedDB erişimi. Aynı şema public/sw.js içinde de kullanılır (bildirim
  * aksiyonları uygulama kapalıyken veriyi günceller) — değişiklikleri iki yerde de yapın.
  */
+import { type AddressBook, normalizeBook } from "./addressbook";
 import type { Reminder } from "./types";
 
 const DB_NAME = "hatirlat-bana";
@@ -66,3 +67,7 @@ export async function getDeviceId(): Promise<string> {
   }
   return id;
 }
+
+/** Adres defteri (kısa adlar, sık kullanılan adresler, öğrenilen düzeltmeler). Eski kurulumlarda yoksa boş döner. */
+export const loadBook = async (): Promise<AddressBook> => normalizeBook(await getMeta("addressBook"));
+export const saveBook = (book: AddressBook) => setMeta("addressBook", book);

@@ -11,6 +11,8 @@
  *  - ç/ş/ğ/ı/ö/ü düşmesi: "yola cikiyorum", "gidiyom", "navigasyonu ac"
  */
 
+import { type AddressBook, isOnlyGenericPlace, matchAlias } from "./addressbook";
+
 /**
  * Türkçe karakterlerin ASCII karşılığını da kabul eden desen (konuşma tanıma/yazım hataları için).
  * Yalnızca küçük harfli desen metinlerine uygulanır; "i" bayrağıyla birlikte kullanılır.
@@ -231,8 +233,18 @@ export function caseSuffix(word: string, kind: "dative" | "locative"): string {
   return `${/[fstkçşhp]$/u.test(w) ? "t" : "d"}${vowel}`;
 }
 
+/**
+ * Konumun ne kadar güvenilir olduğu:
+ *  alias   → kullanıcının tanımladığı kısa ad ("ev")
+ *  address → cadde + bina numarası
+ *  proper  → özel ad (kesme işaretli ek / açık navigasyon isteği): "Erdemli'ye git"
+ *  weak    → yalnızca eksiz/kesmesiz tahmin ("Sinemaya gidiyorum") ya da tek başına "Hbf"; hızlı navigasyon için yetersiz
+ */
+export type LocationKind = "alias" | "address" | "proper" | "weak";
+
 export interface LocationMatch {
   location: string;
+  kind: LocationKind;
   /** Cümlede fiil yok, yalnızca adres söylendi ("Münsterstraße 160"). */
   bare?: boolean;
   /** Konum ve fiil temizlenmiş/normalleştirilmiş görev başlığı ("Erdemli'ye git"). */
@@ -240,7 +252,7 @@ export interface LocationMatch {
 }
 
 /** `rest`: tarih/saat/tekrar ifadeleri çıkarılmış, büyük/küçük harfi korunmuş metin. */
-export function extractLocation(rest: string): LocationMatch | null {
+export function extractLocation(rest: string, book?: AddressBook): LocationMatch | null {
   const text = unmask(rest);
   const v = (NAV_WORD.test(text) ? VERB_NAV_RE : VERB_RE).exec(text);
   if (!v) return bareAddress(text);
@@ -272,8 +284,16 @@ export function extractLocation(rest: string): LocationMatch | null {
   const norm: "git" | "ol" | "var" = verb.startsWith("ol") ? "ol" : verb.startsWith("var") ? "var" : "git";
   const kind = norm === "ol" ? "locative" : "dative";
 
+  // Kullanıcı tanımlı kısa ad: "Eve gidiyorum", "Hbf'ye git" → adres defterindeki tam adres
+  const aliasHit = book ? matchAlias(seg, book) : null;
+  if (aliasHit) {
+    const lead = before.slice(0, segStart).trimEnd();
+    return { location: aliasHit.address, kind: "alias", title: `${lead ? `${lead} ` : ""}${seg} ${norm}${after}` };
+  }
+
   let base: string;
   let suffix = "";
+  let bareDative = false;
   const apos = /^(.+?)'([\p{L}]{1,4})$/u.exec(seg);
   if (apos) {
     if (!CASE_SUFFIXES.has(apos[2].toLocaleLowerCase("tr-TR"))) return null;
@@ -298,6 +318,7 @@ export function extractLocation(rest: string): LocationMatch | null {
       if (bare) {
         base = bare[1];
         suffix = bare[2];
+        bareDative = true;
       } else if (navOpen) {
         base = seg; // "Navigasyonu Dortmund Flughafen aç": ek aranmaz
       } else {
@@ -322,7 +343,9 @@ export function extractLocation(rest: string): LocationMatch | null {
   else place = `${location}'${caseSuffix(location, kind)}`;
   const prefix = before.slice(0, segStart).trimEnd();
   const title = `${prefix ? `${prefix} ` : ""}${place} ${norm}${after}`;
-  return { location, title };
+  let locKind: LocationKind = addr ? "address" : bareDative ? "weak" : "proper";
+  if (locKind !== "address" && isOnlyGenericPlace(location)) locKind = "weak";
+  return { location, title, kind: locKind };
 }
 
 const BARE_FILLER = new RegExp(
@@ -352,7 +375,7 @@ function bareAddress(text: string): LocationMatch | null {
     if (!ok) return null;
   }
   const location = formatLocation(t);
-  return { location, title: location, bare: true };
+  return { location, title: location, bare: true, kind: "address" };
 }
 
 /**

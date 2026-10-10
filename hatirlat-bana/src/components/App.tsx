@@ -2,10 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { complete, remindTomorrow, rollForward, snoozeHour } from "@/lib/actions";
-import { deleteReminder, getAllReminders, newId, putReminder } from "@/lib/db";
+import { deleteReminder, getAllReminders, loadBook, newId, putReminder, saveBook } from "@/lib/db";
 import { formatTime, friendlyDay, startOfNextDay } from "@/lib/format";
-import { detectNavigationIntent } from "@/lib/intent";
-import { parseReminder } from "@/lib/parse";
+import {
+  type AddressBook,
+  emptyBook,
+  learnCorrection,
+  recordUse,
+  removeAlias,
+  setAlias,
+} from "@/lib/addressbook";
+import { analyzeSpeech } from "@/lib/intent";
+import { isLearnableCorrection, resolveAddress } from "@/lib/resolve";
 import {
   currentPushStatus,
   enablePush,
@@ -17,15 +25,16 @@ import {
 } from "@/lib/push-client";
 import { REPEAT_LABELS, type Reminder } from "@/lib/types";
 import { CheckIcon, MicIcon, PencilIcon, PinIcon, RepeatIcon, StopIcon, TrashIcon } from "./icons";
-import { ConfirmSheet, DetailSheet, EditSheet, QuickNavSheet, TextSheet, type Draft } from "./sheets";
+import { AddressBookSheet, ConfirmSheet, DetailSheet, EditSheet, QuickNavSheet, TextSheet, type Draft } from "./sheets";
 import { spokenAddress } from "@/lib/location";
 import { UNSUPPORTED_MSG, useSpeech } from "./useSpeech";
 
 type SheetState =
   | { kind: "none" }
   | { kind: "text"; text: string }
-  | { kind: "confirm"; draft: Draft }
-  | { kind: "quick"; draft: Draft; location: string }
+  | { kind: "confirm"; draft: Draft; suggestion?: string | null; original?: string }
+  | { kind: "quick"; draft: Draft; location: string; original: string; suggestion: string | null }
+  | { kind: "book" }
   | { kind: "edit"; draft: Draft; id?: string }
   | { kind: "detail"; id: string };
 
@@ -42,6 +51,32 @@ export default function App() {
   const [toast, setToast] = useState<Toast | null>(null);
   const [now, setNow] = useState(0); // ilk yüklemede reload() ayarlar (prerender sırasında saat okunmaz)
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  // Adres defteri: kısa adlar, sık kullanılan adresler, öğrenilen düzeltmeler
+  const [book, setBook] = useState<AddressBook>(emptyBook);
+  const bookRef = useRef<AddressBook>(book);
+  const updateBook = useCallback((fn: (b: AddressBook) => AddressBook) => {
+    const next = fn(bookRef.current);
+    bookRef.current = next;
+    setBook(next);
+    void saveBook(next);
+  }, []);
+  /** Adres gerçekten kullanıldı (navigasyon / hatırlatma): sık kullanılanlara ekle; yanlış duymaysa düzeltmeyi öğren. */
+  const markAddressUsed = useCallback(
+    (address: string, original?: string) =>
+      updateBook((b) => {
+        let n = recordUse(b, address);
+        if (original && isLearnableCorrection(original, address)) n = learnCorrection(n, original, address);
+        return n;
+      }),
+    [updateBook],
+  );
+  useEffect(() => {
+    void loadBook().then((b) => {
+      bookRef.current = b;
+      setBook(b);
+    });
+  }, []);
 
   const showToast = useCallback((t: Toast) => {
     setToast(t);
@@ -139,19 +174,31 @@ export default function App() {
   const onTranscript = useCallback((text: string, lang: string = "tr-TR") => {
     // Almanca adres dikte modu: tüm söylenen adrestir → doğrudan hızlı navigasyon
     if (lang.startsWith("de")) {
-      const location = spokenAddress(text);
+      const original = spokenAddress(text);
+      let location = original;
+      let suggestion: string | null = null;
+      const r = resolveAddress(original, bookRef.current);
+      if (r.status === "auto") location = r.location;
+      else if (r.status === "suggest") suggestion = r.suggestion ?? null;
       setSheet({
         kind: "quick",
         location,
+        original,
+        suggestion,
         draft: { title: location, dueAt: null, repeat: "none", location, source: text },
       });
       return;
     }
-    const p = parseReminder(text);
-    const draft: Draft = { title: p.title, dueAt: p.dueAt, repeat: p.repeat, location: p.location ?? undefined, source: text };
-    // "Erdemli'ye gidiyorum": zaman ifadesi yoksa hatırlatma onayı yerine hızlı navigasyon
-    const nav = detectNavigationIntent(text);
-    setSheet(nav ? { kind: "quick", draft, location: nav.location } : { kind: "confirm", draft });
+    // Ayrıştır + adres defteriyle çözümle (kısa adlar, bulanık adres düzeltme, güvenilir hedef kontrolü)
+    const a = analyzeSpeech(text, Date.now(), bookRef.current);
+    const p = a.parsed;
+    const draft: Draft = { title: a.title, dueAt: p.dueAt, repeat: p.repeat, location: a.location ?? undefined, source: text };
+    // "Erdemli'ye gidiyorum": zaman ifadesi yoksa ve hedef güvenilirse hatırlatma onayı yerine hızlı navigasyon
+    setSheet(
+      a.navigation && a.location
+        ? { kind: "quick", draft, location: a.location, original: p.location ?? a.location, suggestion: a.suggestion }
+        : { kind: "confirm", draft, suggestion: a.suggestion, original: p.location ?? undefined },
+    );
   }, []);
   const speech = useSpeech(onTranscript);
 
@@ -174,7 +221,7 @@ export default function App() {
   };
 
   // ---- Kaydet / düzenle ----
-  const saveDraft = async (d: Draft, id?: string) => {
+  const saveDraft = async (d: Draft, id?: string, original?: string) => {
     const t = Date.now();
     const prev = id ? reminders.find((r) => r.id === id) : undefined;
     const r: Reminder = prev
@@ -195,6 +242,7 @@ export default function App() {
       r.doneAt = undefined;
     }
     await putReminder(r);
+    if (d.location) markAddressUsed(d.location, original);
     setSheet({ kind: "none" });
     await commit();
     if (!prev) {
@@ -287,8 +335,14 @@ export default function App() {
           </details>
         )}
 
+        <p className="mt-10 text-center text-sm text-zinc-500">
+          <button type="button" className="text-indigo-600 underline" onClick={() => setSheet({ kind: "book" })}>
+            Adreslerim (ev, iş, Hbf…)
+          </button>
+        </p>
+
         {push === "on" && (
-          <p className="mt-10 text-center text-sm text-zinc-500">
+          <p className="mt-4 text-center text-sm text-zinc-500">
             Bildirimler açık ·{" "}
             <button type="button" className="text-indigo-600 underline" onClick={onTestPush}>
               Deneme bildirimi gönder
@@ -384,10 +438,20 @@ export default function App() {
       {sheet.kind === "text" && (
         <TextSheet initial={sheet.text} onSubmit={onTextSubmit} onClose={() => setSheet({ kind: "none" })} />
       )}
+      {sheet.kind === "book" && (
+        <AddressBookSheet
+          book={book}
+          onAdd={(name, address) => updateBook((b) => setAlias(b, name, address))}
+          onRemove={(name) => updateBook((b) => removeAlias(b, name))}
+          onClose={() => setSheet({ kind: "none" })}
+        />
+      )}
       {sheet.kind === "quick" && (
         <QuickNavSheet
           location={sheet.location}
+          suggestion={sheet.suggestion}
           source={sheet.draft.source}
+          onUse={(address) => markAddressUsed(address, sheet.original)}
           onSaveAsReminder={(location) =>
             setSheet({
               kind: "confirm",
@@ -400,7 +464,11 @@ export default function App() {
       {sheet.kind === "confirm" && (
         <ConfirmSheet
           draft={sheet.draft}
-          onSave={() => saveDraft(sheet.draft)}
+          suggestion={sheet.suggestion}
+          onAcceptSuggestion={() =>
+            setSheet({ ...sheet, suggestion: null, draft: { ...sheet.draft, location: sheet.suggestion ?? sheet.draft.location } })
+          }
+          onSave={() => saveDraft(sheet.draft, undefined, sheet.original)}
           onEdit={() => setSheet({ kind: "edit", draft: sheet.draft })}
           onFixText={() => setSheet({ kind: "text", text: sheet.draft.source ?? "" })}
           onClose={() => setSheet({ kind: "none" })}
