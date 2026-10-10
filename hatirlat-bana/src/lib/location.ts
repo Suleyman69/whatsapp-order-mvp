@@ -12,6 +12,7 @@
  */
 
 import { type AddressBook, isOnlyGenericPlace, matchAlias } from "./addressbook";
+import { exactCity, isPersonName, matchCity } from "./cities";
 
 /**
  * Türkçe karakterlerin ASCII karşılığını da kabul eden desen (konuşma tanıma/yazım hataları için).
@@ -142,8 +143,10 @@ function canonStreetToken(token: string): string {
 }
 
 export interface Address {
-  /** "Dortmund" (varsa) */
+  /** "Dortmund" (varsa); yüksek güvenle düzeltilmiş olabilir ("Ahen" → "Aachen") */
   city?: string;
+  /** Orta güvenli şehir önerisi ("Aken" → "Aachen"); city değişmez, "… mu demek istedin?" için */
+  citySuggestion?: string;
   /** "Münsterstraße 160" */
   street: string;
 }
@@ -169,7 +172,7 @@ const MISHEARD_STREET: Record<string, string> = { manchester: "Münster", monste
 
 /** "munster" → "Münster"; sözlükte yoksa verilen sözcük aynen döner. */
 function restoreName(w: string): string {
-  return NAME_MAP[w.toLocaleLowerCase("tr-TR")] ?? w;
+  return exactCity(w) ?? NAME_MAP[w.toLocaleLowerCase("tr-TR")] ?? w;
 }
 
 /** Cadde adı gövdesi ("Manchester" + "straße"): sözlük ve yanlış duyma düzeltmesi. */
@@ -208,17 +211,47 @@ export function parseAddress(raw: string): Address | null {
   if (before.length && after.length) return null; // belirsiz, olduğu gibi bırak
   const cityWords = before.length ? before : after;
   if (cityWords.some((w) => /\d/.test(w))) return null; // posta kodu vb.: olduğu gibi bırak
-  const city = cityWords
+  const typed = cityWords
     .map((w, k) => (k > 0 && SMALL_WORDS.has(w.toLocaleLowerCase("tr-TR")) ? w.toLocaleLowerCase("tr-TR") : restoreName(fixName(w))))
     .join(" ");
-  return { city: city || undefined, street: `${streetName} ${number}` };
+  // Şehir adı bulanık/sesbilgisel normalizasyon: tam eşleşme ve yüksek güven doğrudan düzeltilir, orta güven öneri olur
+  const m = typed ? matchCity(typed, "address") : null;
+  let city = typed;
+  let citySuggestion: string | undefined;
+  if (m && (m.status === "exact" || m.status === "auto")) city = m.city;
+  else if (m?.status === "suggest") citySuggestion = m.city;
+  return { city: city || undefined, ...(citySuggestion ? { citySuggestion } : {}), street: `${streetName} ${number}` };
 }
 
-/** "Bonn Rochusstr 400" → "Bonn, Rochusstraße 400"; adres değilse yalnızca büyük/küçük harf düzeltilir. */
-export function formatLocation(raw: string): string {
+/**
+ * Konumu normalleştirir. Adreste "Bonn Rochusstr 400" → "Bonn, Rochusstraße 400"; adres olmayan yer öbeğinde
+ * büyük/küçük harf ve ilk sözcükteki şehir adı düzeltilir ("ahen hbf" → "Aachen Hbf").
+ * Orta güvenli şehir düzeltmesi `suggestion` olarak döner ve uygulanmaz.
+ */
+export function normalizeLocation(raw: string): { location: string; suggestion?: string } {
   const addr = parseAddress(raw);
-  if (addr) return addr.city ? `${addr.city}, ${addr.street}` : addr.street;
-  return normalizeCase(raw);
+  if (addr) {
+    const join = (city: string | undefined) => (city ? `${city}, ${addr.street}` : addr.street);
+    return { location: join(addr.city), suggestion: addr.citySuggestion ? join(addr.citySuggestion) : undefined };
+  }
+  const tokens = normalizeCase(raw).split(" ").filter(Boolean);
+  // Çok sözcüklü şehirler tam eşleşme ("Bad Honnef Hbf"), tek sözcükte bulanık eşleşme ("Ahen Hbf")
+  for (const k of [3, 2]) {
+    const phrase = tokens.slice(0, k).join(" ");
+    const exact = tokens.length >= k ? exactCity(phrase) : undefined;
+    if (exact) return { location: [exact, ...tokens.slice(k)].join(" ") };
+  }
+  if (tokens.length) {
+    const m = matchCity(tokens[0], "place");
+    if (m.status === "exact" || m.status === "auto") return { location: [m.city, ...tokens.slice(1)].join(" ") };
+    if (m.status === "suggest") return { location: tokens.join(" "), suggestion: [m.city, ...tokens.slice(1)].join(" ") };
+  }
+  return { location: tokens.join(" ") };
+}
+
+/** "Bonn Rochusstr 400" → "Bonn, Rochusstraße 400"; bkz. normalizeLocation. */
+export function formatLocation(raw: string): string {
+  return normalizeLocation(raw).location;
 }
 
 const ALL_VOWELS = "aeıioöuü";
@@ -244,6 +277,8 @@ export type LocationKind = "alias" | "address" | "proper" | "weak";
 
 export interface LocationMatch {
   location: string;
+  /** Orta güvenli şehir düzeltmesi önerisi (uygulanmadı): "… mu demek istedin?" */
+  suggestion?: string;
   kind: LocationKind;
   /** Cümlede fiil yok, yalnızca adres söylendi ("Münsterstraße 160"). */
   bare?: boolean;
@@ -333,7 +368,8 @@ export function extractLocation(rest: string, book?: AddressBook): LocationMatch
   // Özel ad belirtisi: kesme işareti, büyük harf ya da rakam ("erdemliye git" gibi belirsiz yazımlar atlanır)
   if (!(apos || /\p{Lu}/u.test(base) || /\d/.test(base))) return null;
 
-  const location = formatLocation(base);
+  const normalized = normalizeLocation(base);
+  const location = normalized.location;
   // Tam adreste görev kısa olur: "Dortmund Münsterstraße 160'a gideceğim" → "Dortmund'a git"
   const addr = parseAddress(base);
   let place: string;
@@ -345,7 +381,9 @@ export function extractLocation(rest: string, book?: AddressBook): LocationMatch
   const title = `${prefix ? `${prefix} ` : ""}${place} ${norm}${after}`;
   let locKind: LocationKind = addr ? "address" : bareDative ? "weak" : "proper";
   if (locKind !== "address" && isOnlyGenericPlace(location)) locKind = "weak";
-  return { location, title, kind: locKind };
+  // "Mehmet'e git", "Hakan'a gidiyorum": yaygın kişi adı yer değildir
+  if (locKind === "proper" && !location.includes(" ") && isPersonName(location)) locKind = "weak";
+  return { location, title, kind: locKind, suggestion: normalized.suggestion };
 }
 
 const BARE_FILLER = new RegExp(
@@ -378,8 +416,8 @@ function bareAddress(text: string): LocationMatch | null {
       .every((w) => !/'/.test(w) && (/^\p{Lu}|^\d/u.test(w) || SMALL_WORDS.has(w.toLocaleLowerCase("tr-TR")) || STREET_STANDALONE.test(w) || NR_TOKEN.test(w)));
     if (!ok) return null;
   }
-  const location = formatLocation(t);
-  return { location, title: location, bare: true, kind: "address" };
+  const { location, suggestion } = normalizeLocation(t);
+  return { location, title: location, bare: true, kind: "address", suggestion };
 }
 
 /**

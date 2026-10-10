@@ -23,6 +23,8 @@ export interface ParseResult {
   locationBare: boolean;
   /** Konumun güvenilirliği; konum yoksa null. */
   locationKind: LocationKind | null;
+  /** Orta güvenli şehir düzeltme önerisi ("Aken" → "Aachen"); uygulanmadı. */
+  locationSuggestion: string | null;
 }
 
 export interface ParseOptions {
@@ -295,6 +297,7 @@ export function parseReminder(input: string, now: number = Date.now(), opts: Par
   const location = loc ? loc.location : null;
   const locationBare = !!loc?.bare;
   const locationKind = loc ? loc.kind : null;
+  const locationSuggestion = loc?.suggestion ?? null;
 
   // ---- Zamanı birleştir ----
   const timeExplicit = time !== null || exactAt !== null;
@@ -305,7 +308,7 @@ export function parseReminder(input: string, now: number = Date.now(), opts: Par
       : null;
 
   if (exactAt !== null && !day && repeat === "none") {
-    return { title, dueAt: Math.floor(exactAt / 60_000) * 60_000, repeat, timeExplicit: true, location, locationBare, locationKind };
+    return { title, dueAt: Math.floor(exactAt / 60_000) * 60_000, repeat, timeExplicit: true, location, locationBare, locationKind, locationSuggestion };
   }
   if (exactAt !== null && !hm) {
     const w = toWall(exactAt);
@@ -336,7 +339,7 @@ export function parseReminder(input: string, now: number = Date.now(), opts: Par
   }
 
   if (!day && !hm && repeat === "none") {
-    return { title, dueAt: null, repeat, timeExplicit: false, location, locationBare, locationKind };
+    return { title, dueAt: null, repeat, timeExplicit: false, location, locationBare, locationKind, locationSuggestion };
   }
 
   if (!day) {
@@ -352,7 +355,7 @@ export function parseReminder(input: string, now: number = Date.now(), opts: Par
     dueAt = Math.ceil((now + 15 * 60_000) / 300_000) * 300_000;
   }
 
-  return { title, dueAt, repeat, timeExplicit, location, locationBare, locationKind };
+  return { title, dueAt, repeat, timeExplicit, location, locationBare, locationKind, locationSuggestion };
 }
 
 function buildDate(dd: number, mm: number, yyyy: number | null, today: Date, clamp = false): Date | null {

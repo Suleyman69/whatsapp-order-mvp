@@ -9,7 +9,7 @@
  */
 import { type AddressBook, GAZETTEER } from "./addressbook";
 import { fold, nameSimilarity } from "./fuzzy";
-import { parseAddress } from "./location";
+import { type Address, parseAddress } from "./location";
 
 export type ResolveStatus = "exact" | "auto" | "suggest" | "none";
 
@@ -91,7 +91,25 @@ export function homeCity(book: AddressBook): string | undefined {
 
 const sameCity = (a?: string, b?: string) => !!a && !!b && nameSimilarity(a, b) >= 0.85;
 
+/** Şehir adında orta güvenli düzeltme varsa öneriye yansıtır ("Aken, Hauptstraße 5" → "Aachen, Hauptstraße 5 mu demek istedin?"). */
+function withCitySuggestion(res: Resolution, addr: Address): Resolution {
+  if (!addr.citySuggestion) return res;
+  if (res.status === "suggest" && res.suggestion) {
+    return { ...res, suggestion: addr.city ? res.suggestion.replace(addr.city, addr.citySuggestion) : `${addr.citySuggestion}, ${res.suggestion}` };
+  }
+  if (res.status === "none" || res.status === "exact") {
+    return { status: "suggest", location: res.location, suggestion: `${addr.citySuggestion}, ${addr.street}`, score: Math.max(res.score, 0.76), source: res.source };
+  }
+  return res;
+}
+
 export function resolveAddress(location: string, book: AddressBook): Resolution {
+  const res = resolveStreet(location, book);
+  const addr = res.source === "correction" ? null : parseAddress(location);
+  return addr ? withCitySuggestion(res, addr) : res;
+}
+
+function resolveStreet(location: string, book: AddressBook): Resolution {
   const none: Resolution = { status: "none", location, score: 0 };
 
   // 1) kullanıcının daha önce onayladığı düzeltme

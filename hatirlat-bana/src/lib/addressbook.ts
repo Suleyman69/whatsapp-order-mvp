@@ -3,6 +3,7 @@
  * sık kullanılan adresler ve kullanıcının yaptığı düzeltmeler. Bulanık eşleştirme bunlara
  * yerleşik cadde listesinden daha yüksek ağırlık verir.
  */
+import { GERMAN_CITIES, TURKISH_CITIES } from "./cities";
 import { fold } from "./fuzzy";
 
 export interface BookAlias {
@@ -98,13 +99,7 @@ export const GAZETTEER: Record<string, string[]> = {
 };
 
 /** "Sinemaya gidiyorum" gibi cümlelerin yer sayılmaması için, yalnızca bilinen şehirler tek başına güvenilir hedeftir. */
-export const KNOWN_CITIES = [
-  "Dortmund", "Köln", "Bonn", "Essen", "Düsseldorf", "Duisburg", "Bochum", "Wuppertal", "Bielefeld", "Münster", "Aachen",
-  "Gelsenkirchen", "Hagen", "Hamm", "Unna", "Lünen", "Hamburg", "Berlin", "München", "Frankfurt", "Stuttgart", "Hannover",
-  "Bremen", "Leipzig", "Dresden", "Nürnberg", "Mannheim", "Karlsruhe", "Kassel", "Siegen", "Paderborn", "Osnabrück",
-  "İstanbul", "Istanbul", "Ankara", "İzmir", "Izmir", "Mersin", "Erdemli", "Adana", "Antalya", "Bursa", "Konya", "Kayseri",
-  "Gaziantep", "Trabzon",
-];
+export const KNOWN_CITIES = [...GERMAN_CITIES, ...TURKISH_CITIES];
 const KNOWN_CITY_KEYS = new Set(KNOWN_CITIES.map(fold));
 
 /** Tek başına anlamsız yer türü sözcükleri: yanlarında şehir/ad yoksa güvenilir hedef değildir ("Hbf'ye git"). */

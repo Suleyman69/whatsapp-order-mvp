@@ -73,6 +73,8 @@ export function analyzeSpeech(text: string, now: number = Date.now(), book: Addr
       suggestion = r.suggestion;
     }
   }
+  // Adres olmayan yer öbeğinde orta güvenli şehir önerisi ("Aken'e gidiyorum" → Aachen mu demek istedin?)
+  if (!suggestion && parsed.locationSuggestion) suggestion = parsed.locationSuggestion;
   let navigation = false;
   if (location && parsed.dueAt === null && parsed.repeat === "none") {
     const t = text.toLocaleLowerCase("tr-TR");
