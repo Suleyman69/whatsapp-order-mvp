@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { detectNavigationIntent } from "../src/lib/intent";
-import { formatLocation, parseAddress } from "../src/lib/location";
+import { formatLocation, parseAddress, spokenAddress } from "../src/lib/location";
 import { parseReminder } from "../src/lib/parse";
 import { fromWall } from "../src/lib/tz";
 
@@ -50,8 +50,8 @@ const speech: Array<[string, string]> = [
   ["Dortmund Münsterstraße 160'a gidiyoz", DM],
   ["Dortmund Münsterstraße 160'a yola cikiyorum", DM],
   ["Dortmund Münsterstraße 160'a yola çıkıyom", DM],
-  ["Munsterstrasse 160'a gidiyorum", "Munsterstraße 160"],
-  ["Koln Hbf'ye git", "Koln Hbf"],
+  ["Munsterstrasse 160'a gidiyorum", "Münsterstraße 160"],
+  ["Koln Hbf'ye git", "Köln Hbf"],
   ["Köln Hbf'ye git.", "Köln Hbf"],
   ["köln hbf'ye git", "Köln Hbf"],
   // navigasyon açma kalıpları
@@ -72,6 +72,64 @@ for (const [text, location] of speech) {
     assert.deepEqual(detectNavigationIntent(text, NOW), { location });
   });
 }
+
+// Fiilsiz, yalnızca adres söylendi (ekran görüntüsündeki durum: Safari "Münsterstrasse 160" için "Manchester Straße 160" yazdı)
+const bare: Array<[string, string]> = [
+  ["Manchester Straße 160", "Münsterstraße 160"],
+  ["Manchester Strasse 160", "Münsterstraße 160"],
+  ["manchester straße 160", "Münsterstraße 160"],
+  ["Monster Straße 160", "Münsterstraße 160"],
+  ["Münsterstrasse 160", "Münsterstraße 160"],
+  ["Munsterstrasse 160", "Münsterstraße 160"],
+  ["Muensterstrasse 160", "Münsterstraße 160"],
+  ["Münsterstraße 160.", "Münsterstraße 160"],
+  ["Münsterstraße 160'a", "Münsterstraße 160"],
+  ["Dortmund Münsterstraße 160", DM],
+  ["Dortmund Manchester Straße 160", DM],
+  ["Koln Munster Str. 5", "Köln, Münsterstraße 5"],
+  ["Adres Münsterstraße 160", "Münsterstraße 160"],
+  ["Navigasyon Dortmund Münsterstr. 160", DM],
+];
+for (const [text, location] of bare) {
+  test(`yalnızca adres → hızlı navigasyon: ${text}`, () => {
+    const r = parseReminder(text, NOW);
+    assert.equal(r.location, location);
+    assert.equal(r.locationBare, true);
+    assert.deepEqual(detectNavigationIntent(text, NOW), { location });
+  });
+}
+
+test("fiilsiz adres zaman ifadesiyle hatırlatma olur; hatırlat dersen de hatırlatma", () => {
+  const timed = parseReminder("yarın saat 10'da Manchester Straße 160", NOW);
+  assert.equal(timed.location, "Münsterstraße 160");
+  assert.equal(timed.dueAt, fromWall(new Date(Date.UTC(2026, 9, 11, 10, 0))));
+  assert.equal(detectNavigationIntent("yarın saat 10'da Manchester Straße 160", NOW), null);
+  const remind = parseReminder("Münsterstraße 160 hatırlat", NOW);
+  assert.equal(remind.location, "Münsterstraße 160");
+  assert.equal(detectNavigationIntent("Münsterstraße 160 hatırlat", NOW), null);
+});
+
+test("adres olmayan kısa cümleler yalnızca-adres sayılmaz", () => {
+  for (const t of ["Mehmet", "Süt al", "Manchester", "Münster", "Dr. Müller 5 randevu", "Hauptstr. 5 Dr. Müller'i ara"]) {
+    assert.equal(parseReminder(t, NOW).locationBare, false, t);
+    assert.equal(detectNavigationIntent(t, NOW), null, t);
+  }
+});
+
+test("Almanca dikte edilen adres normalleşir", () => {
+  assert.equal(spokenAddress("Münsterstraße 160"), "Münsterstraße 160");
+  assert.equal(spokenAddress("Münsterstraße 160 Dortmund"), DM);
+  assert.equal(spokenAddress("Dortmund Münsterstraße 160."), DM);
+  assert.equal(spokenAddress("Navigation zu Münsterstraße 160 Dortmund"), DM);
+  assert.equal(spokenAddress("Bitte navigiere nach Dortmund Flughafen"), "Dortmund Flughafen");
+  assert.equal(spokenAddress("Fahre zum Köln Hauptbahnhof"), "Köln Hauptbahnhof");
+});
+
+test("umlaut geri getirme", () => {
+  assert.equal(formatLocation("Koln Hbf"), "Köln Hbf");
+  assert.equal(formatLocation("dusseldorf flughafen"), "Düsseldorf Flughafen");
+  assert.equal(parseAddress("Muenchen Hauptstr. 1")?.city, "München");
+});
 
 // Zaman ifadesi varsa aynı adres varyasyonları normal hatırlatma olarak kalır
 const timed: Array<[string, string, number]> = [

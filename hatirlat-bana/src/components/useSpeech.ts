@@ -60,10 +60,12 @@ const join = (a: string, b: string) => [a, b].filter(Boolean).join(" ");
  * başlatılır ve önceki kelimeler korunur. Son kelimeden SILENCE_MS sonra ya da kullanıcı
  * butona tekrar basınca biter.
  */
-export function useSpeech(onFinal: (text: string) => void) {
+/** `lang`: tanıma dili. Almanca adres dikte etmek için "de-DE". */
+export function useSpeech(onFinal: (text: string, lang: string) => void) {
   const [listening, setListening] = useState(false);
   const [interim, setInterim] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [activeLang, setActiveLang] = useState("tr-TR");
   const recRef = useRef<Recognition | null>(null);
   const stopRef = useRef<(() => void) | null>(null);
   const onFinalRef = useRef(onFinal);
@@ -82,7 +84,7 @@ export function useSpeech(onFinal: (text: string) => void) {
 
   const stop = useCallback(() => stopRef.current?.(), []);
 
-  const start = useCallback(() => {
+  const start = useCallback((lang: string = "tr-TR") => {
     const Ctor = getCtor();
     if (!Ctor) {
       setError(UNSUPPORTED_MSG);
@@ -90,6 +92,7 @@ export function useSpeech(onFinal: (text: string) => void) {
     }
     setError(null);
     setInterim("");
+    setActiveLang(lang);
 
     let committed = ""; // biten oturumlardan biriken metin
     let current = ""; // şu anki oturumun metni
@@ -119,13 +122,13 @@ export function useSpeech(onFinal: (text: string) => void) {
       setListening(false);
       setInterim("");
       const text = join(committed, current).trim();
-      if (text) onFinalRef.current(text);
+      if (text) onFinalRef.current(text, lang);
       else if (!failed) setError("Ses duyulmadı. Tekrar dene.");
     };
 
     const open = (): boolean => {
       const rec = new Ctor();
-      rec.lang = "tr-TR";
+      rec.lang = lang;
       rec.interimResults = true;
       rec.continuous = true;
       rec.maxAlternatives = 1;
@@ -175,5 +178,5 @@ export function useSpeech(onFinal: (text: string) => void) {
     return true;
   }, []);
 
-  return { listening, interim, error, setError, start, stop, isSupported: () => getCtor() !== null };
+  return { listening, interim, error, activeLang, setError, start, stop, isSupported: () => getCtor() !== null };
 }

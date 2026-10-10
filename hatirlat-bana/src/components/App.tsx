@@ -18,6 +18,7 @@ import {
 import { REPEAT_LABELS, type Reminder } from "@/lib/types";
 import { CheckIcon, MicIcon, PencilIcon, PinIcon, RepeatIcon, StopIcon, TrashIcon } from "./icons";
 import { ConfirmSheet, DetailSheet, EditSheet, QuickNavSheet, TextSheet, type Draft } from "./sheets";
+import { spokenAddress } from "@/lib/location";
 import { UNSUPPORTED_MSG, useSpeech } from "./useSpeech";
 
 type SheetState =
@@ -135,7 +136,17 @@ export default function App() {
   }, [now, reminders, push, reload, showToast]);
 
   // ---- Ses ----
-  const onTranscript = useCallback((text: string) => {
+  const onTranscript = useCallback((text: string, lang: string = "tr-TR") => {
+    // Almanca adres dikte modu: tüm söylenen adrestir → doğrudan hızlı navigasyon
+    if (lang.startsWith("de")) {
+      const location = spokenAddress(text);
+      setSheet({
+        kind: "quick",
+        location,
+        draft: { title: location, dueAt: null, repeat: "none", location, source: text },
+      });
+      return;
+    }
     const p = parseReminder(text);
     const draft: Draft = { title: p.title, dueAt: p.dueAt, repeat: p.repeat, location: p.location ?? undefined, source: text };
     // "Erdemli'ye gidiyorum": zaman ifadesi yoksa hatırlatma onayı yerine hızlı navigasyon
@@ -143,6 +154,11 @@ export default function App() {
     setSheet(nav ? { kind: "quick", draft, location: nav.location } : { kind: "confirm", draft });
   }, []);
   const speech = useSpeech(onTranscript);
+
+  const onGermanMic = () => {
+    if (speech.listening) return speech.stop();
+    speech.start("de-DE");
+  };
 
   const onMic = () => {
     if (speech.listening) return speech.stop();
@@ -286,7 +302,9 @@ export default function App() {
         <div className="pointer-events-auto mx-auto max-w-lg px-5">
           <p className="mb-3 min-h-7 text-center text-lg leading-snug" aria-live="polite">
             {speech.listening ? (
-              <span className="text-zinc-600 dark:text-zinc-300">{speech.interim || "Dinliyorum…"}</span>
+              <span className="text-zinc-600 dark:text-zinc-300">
+                {speech.interim || (speech.activeLang.startsWith("de") ? "Adresi Almanca söyle…" : "Dinliyorum…")}
+              </span>
             ) : speech.error ? (
               <span className="text-red-600">{speech.error}</span>
             ) : null}
@@ -308,12 +326,34 @@ export default function App() {
               onClick={onMic}
               aria-label={speech.listening ? "Dinlemeyi bitir" : "Sesle ekle"}
               className={`flex size-24 items-center justify-center rounded-full text-white shadow-lg ${
-                speech.listening ? "bg-red-600 ring-8 ring-red-600/25" : "bg-indigo-600 active:bg-indigo-700"
+                speech.listening && !speech.activeLang.startsWith("de")
+                  ? "bg-red-600 ring-8 ring-red-600/25"
+                  : "bg-indigo-600 active:bg-indigo-700"
               }`}
             >
-              {speech.listening ? <StopIcon className="size-9" /> : <MicIcon className="size-11" />}
+              {speech.listening && !speech.activeLang.startsWith("de") ? (
+                <StopIcon className="size-9" />
+              ) : (
+                <MicIcon className="size-11" />
+              )}
             </button>
-            <div className="size-16" aria-hidden />
+            <button
+              type="button"
+              onClick={onGermanMic}
+              aria-label={speech.listening && speech.activeLang.startsWith("de") ? "Dinlemeyi bitir" : "Adresi Almanca söyle"}
+              className={`flex size-16 flex-col items-center justify-center rounded-full ${
+                speech.listening && speech.activeLang.startsWith("de")
+                  ? "bg-red-600 text-white"
+                  : "bg-zinc-100 active:bg-zinc-200 dark:bg-zinc-800 dark:active:bg-zinc-700"
+              }`}
+            >
+              {speech.listening && speech.activeLang.startsWith("de") ? (
+                <StopIcon className="size-6" />
+              ) : (
+                <MicIcon className="size-6" />
+              )}
+              <span className="text-xs leading-none font-bold">DE</span>
+            </button>
           </div>
           {speech.error === UNSUPPORTED_MSG && (
             <p className="mt-2 text-center text-sm text-zinc-500">Kalem ikonuna dokunarak yazabilirsin.</p>
@@ -348,7 +388,12 @@ export default function App() {
         <QuickNavSheet
           location={sheet.location}
           source={sheet.draft.source}
-          onSaveAsReminder={() => setSheet({ kind: "confirm", draft: sheet.draft })}
+          onSaveAsReminder={(location) =>
+            setSheet({
+              kind: "confirm",
+              draft: { ...sheet.draft, location, title: location === sheet.location ? sheet.draft.title : location },
+            })
+          }
           onClose={() => setSheet({ kind: "none" })}
         />
       )}

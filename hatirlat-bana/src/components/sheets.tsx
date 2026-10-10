@@ -6,8 +6,10 @@ import { REPEAT_LABELS, type Reminder, type Repeat } from "@/lib/types";
 import { blitzerLink } from "@/lib/blitzer";
 import { mapsUrl } from "@/lib/nav";
 import { isIOS } from "@/lib/push-client";
-import { AlertIcon, NavIcon, PencilIcon } from "./icons";
+import { spokenAddress } from "@/lib/location";
+import { AlertIcon, MicIcon, NavIcon, PencilIcon, StopIcon } from "./icons";
 import { PrimaryButton, SecondaryButton, Sheet } from "./Sheet";
+import { useSpeech } from "./useSpeech";
 
 /**
  * Blitzer.de PRO'yu açar (yalnızca iPhone/iPad'de, konumu olan hatırlatmalarda gösterilir).
@@ -79,22 +81,78 @@ export function QuickNavSheet({
 }: {
   location: string;
   source?: string;
-  onSaveAsReminder: () => void;
+  onSaveAsReminder: (location: string) => void;
   onClose: () => void;
 }) {
+  // Hedef düzenlenebilir: Türkçe tanıyıcı adı yanlış yazdıysa elle ya da Almanca dikteyle düzeltilir
+  const [loc, setLoc] = useState(location);
+  const de = useGermanAddress(setLoc);
+  const value = loc.trim();
   return (
     <Sheet onClose={onClose} label="Hemen yola çık">
       {source && <p className="mb-3 rounded-2xl bg-zinc-100 p-3 text-base italic text-zinc-600 dark:bg-zinc-900 dark:text-zinc-400">“{source}”</p>}
-      <p className="text-base text-zinc-500">Hedef</p>
-      <p className="mb-5 text-2xl font-bold leading-tight">{location}</p>
-      <div className="space-y-3">
-        <NavButton location={location} />
-        <BlitzerButton />
-        <SecondaryButton onClick={onSaveAsReminder}>Hatırlatma olarak kaydet</SecondaryButton>
+      <label htmlFor="hb-target" className="block text-base text-zinc-500">
+        Hedef
+      </label>
+      <div className="mt-1 flex gap-2">
+        <input
+          id="hb-target"
+          value={loc}
+          onChange={(e) => setLoc(e.target.value)}
+          className="h-14 min-w-0 flex-1 rounded-2xl bg-zinc-100 px-4 text-xl font-semibold outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-zinc-900"
+          enterKeyHint="done"
+        />
+        <GermanMicButton de={de} />
+      </div>
+      <GermanStatus de={de} hint="Yanlış yazıldıysa düzelt ya da DE tuşuyla adresi Almanca söyle." />
+      <div className="mt-4 space-y-3">
+        {value && <NavButton location={value} />}
+        {value && <BlitzerButton />}
+        <SecondaryButton onClick={() => onSaveAsReminder(value)} disabled={!value}>
+          Hatırlatma olarak kaydet
+        </SecondaryButton>
         <SecondaryButton onClick={onClose}>Kapat</SecondaryButton>
       </div>
     </Sheet>
   );
+}
+
+/**
+ * Adresi Almanca (de-DE) dikte eder: Türkçe tanıyıcı "Münsterstrasse"ı "Manchester Straße" gibi yazabilir,
+ * Almanca tanıyıcı Alman cadde/şehir adlarını doğru yazar.
+ */
+function useGermanAddress(onAddress: (address: string) => void) {
+  const speech = useSpeech((text) => onAddress(spokenAddress(text)));
+  return {
+    listening: speech.listening,
+    interim: speech.interim,
+    error: speech.error,
+    toggle: () => (speech.listening ? speech.stop() : speech.start("de-DE")),
+  };
+}
+
+type GermanAddress = ReturnType<typeof useGermanAddress>;
+
+function GermanMicButton({ de }: { de: GermanAddress }) {
+  return (
+    <button
+      type="button"
+      onClick={de.toggle}
+      aria-label={de.listening ? "Dinlemeyi bitir" : "Adresi Almanca söyle"}
+      className={`flex size-14 shrink-0 flex-col items-center justify-center rounded-2xl ${
+        de.listening ? "bg-red-600 text-white" : "bg-zinc-100 active:bg-zinc-200 dark:bg-zinc-800 dark:active:bg-zinc-700"
+      }`}
+    >
+      {de.listening ? <StopIcon className="size-5" /> : <MicIcon className="size-5" />}
+      <span className="mt-0.5 text-[11px] leading-none font-bold">DE</span>
+    </button>
+  );
+}
+
+function GermanStatus({ de, hint }: { de: GermanAddress; hint?: string }) {
+  if (de.listening) return <p className="mt-2 text-base text-zinc-600 dark:text-zinc-300">{de.interim || "Dinliyorum… adresi Almanca söyle"}</p>;
+  if (de.error) return <p className="mt-2 text-base text-red-600">{de.error}</p>;
+  return hint ? <p className="mt-2 text-sm text-zinc-500">{hint}</p> : null;
 }
 
 /** Yazılı giriş: "Pazartesi 14:30 dişçiyi ara" */
@@ -224,6 +282,7 @@ export function EditSheet({
   const [time, setTime] = useState(draft.dueAt ? toTimeInput(draft.dueAt) : "09:00");
   const [repeat, setRepeat] = useState<Repeat>(draft.repeat);
   const [location, setLocation] = useState(draft.location ?? "");
+  const de = useGermanAddress(setLocation);
 
   const save = () => {
     if (!title.trim()) return;
@@ -295,16 +354,23 @@ export function EditSheet({
             </div>
           </fieldset>
         )}
-        <label className="block">
-          <span className="mb-1 block text-base text-zinc-500">Konum (isteğe bağlı)</span>
-          <input
-            value={location}
-            onChange={(e) => setLocation(e.target.value)}
-            placeholder="Bonn, Rochusstraße 400"
-            className={field}
-            enterKeyHint="done"
-          />
-        </label>
+        <div>
+          <label htmlFor="hb-loc" className="mb-1 block text-base text-zinc-500">
+            Konum (isteğe bağlı)
+          </label>
+          <div className="flex gap-2">
+            <input
+              id="hb-loc"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              placeholder="Bonn, Rochusstraße 400"
+              className={`${field} min-w-0 flex-1`}
+              enterKeyHint="done"
+            />
+            <GermanMicButton de={de} />
+          </div>
+          <GermanStatus de={de} />
+        </div>
         {location.trim() && <NavButton location={location} />}
         {location.trim() && !isNew && <BlitzerButton />}
         <PrimaryButton type="submit" disabled={!title.trim()}>

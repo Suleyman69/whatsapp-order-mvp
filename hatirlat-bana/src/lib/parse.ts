@@ -17,6 +17,8 @@ export interface ParseResult {
   timeExplicit: boolean;
   /** Cümleden çıkarılan hedef konum/adres ("Erdemli", "Bonn, Rochusstraße 400"); yoksa null. */
   location: string | null;
+  /** Konum fiilsiz, yalnızca adres olarak söylendi ("Münsterstraße 160"). */
+  locationBare: boolean;
 }
 
 const L = "\\p{L}";
@@ -280,6 +282,7 @@ export function parseReminder(input: string, now: number = Date.now()): ParseRes
   const loc = extractLocation(orig);
   const title = cleanTitle(loc ? loc.title : unmask(orig));
   const location = loc ? loc.location : null;
+  const locationBare = !!loc?.bare;
 
   // ---- Zamanı birleştir ----
   const timeExplicit = time !== null || exactAt !== null;
@@ -290,7 +293,7 @@ export function parseReminder(input: string, now: number = Date.now()): ParseRes
       : null;
 
   if (exactAt !== null && !day && repeat === "none") {
-    return { title, dueAt: Math.floor(exactAt / 60_000) * 60_000, repeat, timeExplicit: true, location };
+    return { title, dueAt: Math.floor(exactAt / 60_000) * 60_000, repeat, timeExplicit: true, location, locationBare };
   }
   if (exactAt !== null && !hm) {
     const w = toWall(exactAt);
@@ -321,7 +324,7 @@ export function parseReminder(input: string, now: number = Date.now()): ParseRes
   }
 
   if (!day && !hm && repeat === "none") {
-    return { title, dueAt: null, repeat, timeExplicit: false, location };
+    return { title, dueAt: null, repeat, timeExplicit: false, location, locationBare };
   }
 
   if (!day) {
@@ -337,7 +340,7 @@ export function parseReminder(input: string, now: number = Date.now()): ParseRes
     dueAt = Math.ceil((now + 15 * 60_000) / 300_000) * 300_000;
   }
 
-  return { title, dueAt, repeat, timeExplicit, location };
+  return { title, dueAt, repeat, timeExplicit, location, locationBare };
 }
 
 function buildDate(dd: number, mm: number, yyyy: number | null, today: Date, clamp = false): Date | null {

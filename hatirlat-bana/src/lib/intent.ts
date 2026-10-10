@@ -49,6 +49,8 @@ export function detectNavigationIntent(text: string, now: number = Date.now()): 
   if (!p.location) return null;
   if (p.dueAt !== null || p.repeat !== "none") return null; // zaman ifadesi var → hatırlatma
   const t = text.toLocaleLowerCase("tr-TR");
-  if (REMINDER_CUE.test(t) || !NAV_CUE.test(t)) return null;
+  if (REMINDER_CUE.test(t)) return null;
+  // Fiil yoksa yalnızca tek başına söylenen adres ("Münsterstraße 160") hızlı moda girer
+  if (!NAV_CUE.test(t) && !p.locationBare) return null;
   return { location: p.location };
 }

@@ -136,7 +136,7 @@ function canonStreetToken(token: string): string {
   const m = STREET_SUFFIX_TOKEN.exec(token);
   if (!m) return fixName(token.replace(/\.$/, ""));
   const [, name, hyphen] = m;
-  return name ? `${fixName(name)}${hyphen}${hyphen ? "Straße" : "straße"}` : "Straße";
+  return name ? `${hyphen ? fixName(name) : restoreStreetStem(fixName(name))}${hyphen}${hyphen ? "Straße" : "straße"}` : "Straße";
 }
 
 export interface Address {
@@ -146,10 +146,41 @@ export interface Address {
   street: string;
 }
 
-/** Hepsi küçük harfle yazılmışsa kelimelerin ilk harfini büyütür (adres olmayan yerler için). */
+/** Umlaut'u konuşma/yazımda düşen yaygın Alman yer adları ("Munster", "Koln", "Muenster" → "Münster", "Köln"). */
+const GERMAN_NAMES = [
+  "Münster", "Köln", "Düsseldorf", "München", "Nürnberg", "Lübeck", "Göttingen", "Osnabrück",
+  "Mönchengladbach", "Gütersloh", "Würzburg", "Fürth", "Saarbrücken", "Mülheim", "Lünen",
+  "Lüdenscheid", "Tübingen", "Überlingen", "Bückeburg", "Jülich", "Büren", "Löhne", "Hürth",
+];
+const NAME_MAP: Record<string, string> = {};
+for (const n of GERMAN_NAMES) {
+  const lower = n.toLocaleLowerCase("tr-TR");
+  NAME_MAP[lower] = n;
+  NAME_MAP[lower.replace(/ä/g, "a").replace(/ö/g, "o").replace(/ü/g, "u")] = n;
+  NAME_MAP[lower.replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue")] = n;
+}
+/**
+ * Türkçe tanıyıcının Almanca cadde adlarını sık yanlış duyduğu örnekler (yalnızca "…straße NN" adres
+ * bağlamındaki cadde adında uygulanır): "Münsterstrasse" → "Manchester Straße" gibi.
+ */
+const MISHEARD_STREET: Record<string, string> = { manchester: "Münster", monster: "Münster", minster: "Münster", munchester: "Münster" };
+
+/** "munster" → "Münster"; sözlükte yoksa verilen sözcük aynen döner. */
+function restoreName(w: string): string {
+  return NAME_MAP[w.toLocaleLowerCase("tr-TR")] ?? w;
+}
+
+/** Cadde adı gövdesi ("Manchester" + "straße"): sözlük ve yanlış duyma düzeltmesi. */
+function restoreStreetStem(stem: string): string {
+  const key = stem.toLocaleLowerCase("tr-TR");
+  return NAME_MAP[key] ?? MISHEARD_STREET[key] ?? stem;
+}
+
+/** Hepsi küçük harfle yazılmışsa kelimelerin ilk harfini büyütür (adres olmayan yerler için); bilinen adlarda umlaut'u geri getirir. */
 function normalizeCase(raw: string): string {
   const s = raw.replace(/\s+/g, " ").trim();
-  return s === s.toLocaleLowerCase("tr-TR") ? s.split(" ").map(trUpper).join(" ") : s;
+  const cased = s === s.toLocaleLowerCase("tr-TR") ? s.split(" ").map(trUpper).join(" ") : s;
+  return cased.split(" ").map(restoreName).join(" ");
 }
 
 /**
@@ -168,7 +199,7 @@ export function parseAddress(raw: string): Address | null {
   // "Münster Straße 160": ayrı yazılmış cadde sözcüğü bir önceki sözcükle birlikte cadde adıdır
   const joined = STREET_STANDALONE.test(t[i]) && i > 0;
   const start = joined ? i - 1 : i;
-  const streetName = joined ? `${fixName(t[i - 1])}straße` : canonStreetToken(t[i]);
+  const streetName = joined ? `${restoreStreetStem(fixName(t[i - 1]))}straße` : canonStreetToken(t[i]);
   const number = t[i + 1].toLocaleLowerCase("tr-TR");
   const before = t.slice(0, start);
   const after = t.slice(i + 2);
@@ -176,7 +207,7 @@ export function parseAddress(raw: string): Address | null {
   const cityWords = before.length ? before : after;
   if (cityWords.some((w) => /\d/.test(w))) return null; // posta kodu vb.: olduğu gibi bırak
   const city = cityWords
-    .map((w, k) => (k > 0 && SMALL_WORDS.has(w.toLocaleLowerCase("tr-TR")) ? w.toLocaleLowerCase("tr-TR") : fixName(w)))
+    .map((w, k) => (k > 0 && SMALL_WORDS.has(w.toLocaleLowerCase("tr-TR")) ? w.toLocaleLowerCase("tr-TR") : restoreName(fixName(w))))
     .join(" ");
   return { city: city || undefined, street: `${streetName} ${number}` };
 }
@@ -202,6 +233,8 @@ export function caseSuffix(word: string, kind: "dative" | "locative"): string {
 
 export interface LocationMatch {
   location: string;
+  /** Cümlede fiil yok, yalnızca adres söylendi ("Münsterstraße 160"). */
+  bare?: boolean;
   /** Konum ve fiil temizlenmiş/normalleştirilmiş görev başlığı ("Erdemli'ye git"). */
   title: string;
 }
@@ -210,7 +243,7 @@ export interface LocationMatch {
 export function extractLocation(rest: string): LocationMatch | null {
   const text = unmask(rest);
   const v = (NAV_WORD.test(text) ? VERB_NAV_RE : VERB_RE).exec(text);
-  if (!v) return null;
+  if (!v) return bareAddress(text);
   let before = text.slice(0, v.index);
   const after = text.slice(v.index + v[0].length);
   const navOpen = NAV_OPEN_VERB.test(v[1]);
@@ -290,4 +323,50 @@ export function extractLocation(rest: string): LocationMatch | null {
   const prefix = before.slice(0, segStart).trimEnd();
   const title = `${prefix ? `${prefix} ` : ""}${place} ${norm}${after}`;
   return { location, title };
+}
+
+const BARE_FILLER = new RegExp(
+  `^(?:(?:${tolerant("şimdi|hemen|adres|adresi|konum|konumu|hedef|hedefi")}|navigasyon\\p{L}*)\\s+)+`,
+  "iu",
+);
+const TRAILING_REMIND = new RegExp(`\\s*(?:diye\\s+)?(?:bana\\s+)?${tolerant("hatırlat")}\\p{L}*\\s*$`, "iu");
+
+/**
+ * Fiilsiz, yalnızca adres söylenen cümle: "Münsterstraße 160", "Dortmund Münster Str. 160",
+ * "Manchester Straße 160" (Türkçe tanıyıcının "Münsterstrasse" için verdiği yanlış yazım).
+ * Cadde + bina numarası şart; adres dışında en fazla 3 sözcük (şehir) kabul edilir.
+ */
+function bareAddress(text: string): LocationMatch | null {
+  let t = text.replace(/[.!?,;]+$/u, "").trim().replace(TRAILING_REMIND, "").trim().replace(BARE_FILLER, "");
+  const apos = /^(.+?\d)'([\p{L}]{1,4})$/u.exec(t);
+  if (apos && CASE_SUFFIXES.has(apos[2].toLocaleLowerCase("tr-TR"))) t = apos[1];
+  const addr = parseAddress(t);
+  if (!addr) return null;
+  if (addr.city && addr.city.split(" ").length > 3) return null;
+  // Karışık harfli metinde her sözcük adres sözcüğü gibi olmalı (büyük harfle başlayan ad, rakam, "Str."); Türkçe fiil/ek varsa adres değildir
+  if (t !== t.toLocaleLowerCase("tr-TR")) {
+    const ok = t
+      .split(/[\s,]+/)
+      .filter(Boolean)
+      .every((w) => !/'/.test(w) && (/^\p{Lu}|^\d/u.test(w) || SMALL_WORDS.has(w.toLocaleLowerCase("tr-TR")) || STREET_STANDALONE.test(w) || NR_TOKEN.test(w)));
+    if (!ok) return null;
+  }
+  const location = formatLocation(t);
+  return { location, title: location, bare: true };
+}
+
+/**
+ * Almanca dikte edilen adres ("Navigation zu Münsterstraße 160 Dortmund", "Münsterstraße 160")
+ * → normalleştirilmiş konum. Önde gelen Almanca yönlendirme kalıpları atılır.
+ */
+export function spokenAddress(text: string): string {
+  const t = text
+    .trim()
+    .replace(/[.!?]+$/u, "")
+    .replace(
+      /^(?:bitte\s+)?(?:navigation|navigiere|navigieren|route|fahre|fahr|ich fahre|ich bin|bring mich|führe mich|fuehre mich)\s+(?:mich\s+)?(?:(?:nach|zu der|zu dem|zum|zur|zu|in die|in der|in)(?![\p{L}]))?\s*/iu,
+      "",
+    )
+    .trim();
+  return formatLocation(t);
 }
