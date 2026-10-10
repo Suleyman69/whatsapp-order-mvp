@@ -13,6 +13,7 @@ import {
   setAlias,
 } from "@/lib/addressbook";
 import { analyzeSpeech } from "@/lib/intent";
+import { cleanTranscript } from "@/lib/transcript";
 import { isLearnableCorrection, resolveAddress } from "@/lib/resolve";
 import {
   currentPushStatus,
@@ -190,6 +191,7 @@ export default function App() {
       return;
     }
     // Ayrıştır + adres defteriyle çözümle (kısa adlar, bulanık adres düzeltme, güvenilir hedef kontrolü)
+    text = cleanTranscript(text);
     const a = analyzeSpeech(text, Date.now(), bookRef.current);
     const p = a.parsed;
     const draft: Draft = { title: a.title, dueAt: p.dueAt, repeat: p.repeat, location: a.location ?? undefined, source: text };
@@ -339,6 +341,7 @@ export default function App() {
           <button type="button" className="text-indigo-600 underline" onClick={() => setSheet({ kind: "book" })}>
             Adreslerim (ev, iş, Hbf…)
           </button>
+          <span className="block pt-1 text-xs text-zinc-400">sürüm {process.env.NEXT_PUBLIC_COMMIT}</span>
         </p>
 
         {push === "on" && (

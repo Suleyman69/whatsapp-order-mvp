@@ -4,6 +4,8 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   serverExternalPackages: ["web-push"],
+  // Hangi sürümün çalıştığını uygulamada görebilmek için (Vercel commit SHA)
+  env: { NEXT_PUBLIC_COMMIT: (process.env.VERCEL_GIT_COMMIT_SHA || process.env.GIT_COMMIT || "yerel").slice(0, 7) },
   turbopack: {
     rules: {
       "*.css": {

@@ -349,7 +349,7 @@ export function extractLocation(rest: string, book?: AddressBook): LocationMatch
 }
 
 const BARE_FILLER = new RegExp(
-  `^(?:(?:${tolerant("şimdi|hemen|adres|adresi|konum|konumu|hedef|hedefi")}|navigasyon\\p{L}*)\\s+)+`,
+  `^(?:(?:${tolerant("şimdi|hemen|adres|adresi|adresse|konum|konumu|hedef|hedefi|bitte")}|navigasyon\\p{L}*)\\s+)+`,
   "iu",
 );
 const TRAILING_REMIND = new RegExp(`\\s*(?:diye\\s+)?(?:bana\\s+)?${tolerant("hatırlat")}\\p{L}*\\s*$`, "iu");
@@ -361,6 +361,10 @@ const TRAILING_REMIND = new RegExp(`\\s*(?:diye\\s+)?(?:bana\\s+)?${tolerant("ha
  */
 function bareAddress(text: string): LocationMatch | null {
   let t = text.replace(/[.!?,;]+$/u, "").trim().replace(TRAILING_REMIND, "").trim().replace(BARE_FILLER, "");
+  // "Münster Straße 160 Nummer": sondaki "Nummer/Adresse" adres parçası değildir
+  t = t.replace(/\s+(?:nummer|adresse|adresi|adres)\s*$/iu, "").trim();
+  // Konuşma tanıma bina numarasını ayırabilir: "Münster Straße 1 60" → "…160"
+  t = t.replace(new RegExp(`(${STREET_CORE}${NR_WORD}\\s+)(\\d{1,2})\\s(\\d{2,3})(?![\\d:.'])`, "iu"), "$1$2$3");
   const apos = /^(.+?\d)'([\p{L}]{1,4})$/u.exec(t);
   if (apos && CASE_SUFFIXES.has(apos[2].toLocaleLowerCase("tr-TR"))) t = apos[1];
   const addr = parseAddress(t);

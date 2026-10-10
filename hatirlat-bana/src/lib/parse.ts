@@ -7,6 +7,7 @@
  */
 import { type AddressBook, isKnownPlace } from "./addressbook";
 import { extractLocation, type LocationKind, maskHouseNumbers, unmask } from "./location";
+import { cleanTranscript } from "./transcript";
 import { toWall, wallAddDays, wallAt, wallDay } from "./tz";
 import type { Repeat } from "./types";
 
@@ -111,7 +112,7 @@ function applyPeriod(h: number, period: Period | null): number {
 }
 
 export function parseReminder(input: string, now: number = Date.now(), opts: ParseOptions = {}): ParseResult {
-  const original = input
+  const original = cleanTranscript(input)
     .replace(/[’‘`´]/g, "'")
     .replace(/\s+/g, " ")
     .trim();

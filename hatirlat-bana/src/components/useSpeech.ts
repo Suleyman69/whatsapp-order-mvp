@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { cleanTranscript } from "@/lib/transcript";
 
 interface SpeechResultEvent {
   results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }>;
@@ -122,7 +123,7 @@ export function useSpeech(onFinal: (text: string, lang: string) => void) {
       setListening(false);
       setInterim("");
       const text = join(committed, current).trim();
-      if (text) onFinalRef.current(text, lang);
+      if (text) onFinalRef.current(cleanTranscript(text), lang);
       else if (!failed) setError("Ses duyulmadı. Tekrar dene.");
     };
 
